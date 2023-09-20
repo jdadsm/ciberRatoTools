@@ -28,7 +28,7 @@ class MyRob(CRobLinkAngs):
         state = 'stop'
         stopped_state = 'run'
 
-        TURNING_SPEED = 0.10
+        TURNING_SPEED = 0.1
         NORMAL_SPEED = 0.08
         
         buffer = ["0","0","1","1","1","0","0"]
@@ -50,21 +50,25 @@ class MyRob(CRobLinkAngs):
             if ones != 3:
                 if abs(ones-3) > 1:
                     line = buffer
-                print("\nNoise\nOnes-"+str(ones)+"\nZeros-"+str(zeros))
+                #print("\nNoise\nOnes-"+str(ones)+"\nZeros-"+str(zeros))
             
             
-            #print("Line:",line)
+            print("Line:",line)
             #O BUFFER AINDA NÃO ESTÁ A SER USADO
             buffer = line
-            
-            if line[1] == "0" and line[2] == "0":
-                self.driveMotors(TURNING_SPEED,-TURNING_SPEED)
-            elif line[4] == "0" and line[5] == "0":
-                self.driveMotors(-TURNING_SPEED,TURNING_SPEED)
-            elif line[2] == "1" and line[3] == "1" and line[4] == "1":
+
+            if line[2] == "1" and line[3] == "1" and line[4] == "1":
                 self.driveMotors(NORMAL_SPEED,NORMAL_SPEED)
+                print("going forward")
+            elif line[4] == "0" and line[5] == "0" and line[6] == "0":
+                self.driveMotors(-TURNING_SPEED,TURNING_SPEED)
+                print("c left")
+            elif line[0] == "0" and line[1] == "0" and line[2] == "0":
+                self.driveMotors(TURNING_SPEED,-TURNING_SPEED)
+                print("c right")
             else: 
                 self.driveMotors(0.0,0.0)
+                print("stop!")
             continue
             
             if self.measures.endLed:
