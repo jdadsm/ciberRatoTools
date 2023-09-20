@@ -28,9 +28,44 @@ class MyRob(CRobLinkAngs):
         state = 'stop'
         stopped_state = 'run'
 
+        TURNING_SPEED = 0.10
+        NORMAL_SPEED = 0.10
+        buffer = ["0","0","1","1","1","0","0",]
+        
         while True:
             self.readSensors()
-
+            
+            
+            line = self.measures.lineSensor
+            ones = 0
+            zeros = 0
+            for i in line:
+                if i == "1":
+                    ones+=1
+                else:
+                    zeros+=1
+                    
+            if ones != 3:
+                if abs(ones-3) > 1:
+                    line = buffer
+                print("\nNoise\nOnes-"+str(ones)+"\nZeros-"+str(zeros))
+            
+            #print("Line:",line)
+            
+            buffer = line
+            
+            if line[1] == "0" and line[2] == "0":
+                self.driveMotors(TURNING_SPEED,-TURNING_SPEED)
+            elif line[4] == "0" and line[5] == "0":
+                self.driveMotors(-TURNING_SPEED,TURNING_SPEED)
+            elif line[2] == "1" and line[3] == "1" and line[4] == "1":
+                self.driveMotors(NORMAL_SPEED,NORMAL_SPEED)
+            else: 
+                self.driveMotors(0.0,0.0)
+            continue
+            
+            
+            
             if self.measures.endLed:
                 print(self.robName + " exiting")
                 quit()
