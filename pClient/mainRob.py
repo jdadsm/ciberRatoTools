@@ -29,14 +29,17 @@ class MyRob(CRobLinkAngs):
         stopped_state = 'run'
 
         TURNING_SPEED = 0.10
-        NORMAL_SPEED = 0.10
-        buffer = ["0","0","1","1","1","0","0",]
+        NORMAL_SPEED = 0.08
+        
+        buffer = ["0","0","1","1","1","0","0"]
         
         while True:
             self.readSensors()
             
             
             line = self.measures.lineSensor
+            
+            #ISTO É SÓ PARA SABER QUANDO HÁ NOISE POR AGORA
             ones = 0
             zeros = 0
             for i in line:
@@ -44,14 +47,14 @@ class MyRob(CRobLinkAngs):
                     ones+=1
                 else:
                     zeros+=1
-                    
             if ones != 3:
                 if abs(ones-3) > 1:
                     line = buffer
                 print("\nNoise\nOnes-"+str(ones)+"\nZeros-"+str(zeros))
             
-            #print("Line:",line)
             
+            #print("Line:",line)
+            #O BUFFER AINDA NÃO ESTÁ A SER USADO
             buffer = line
             
             if line[1] == "0" and line[2] == "0":
@@ -63,8 +66,6 @@ class MyRob(CRobLinkAngs):
             else: 
                 self.driveMotors(0.0,0.0)
             continue
-            
-            
             
             if self.measures.endLed:
                 print(self.robName + " exiting")
