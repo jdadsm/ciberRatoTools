@@ -1,4 +1,5 @@
 
+from asyncio import sleep
 import sys
 from croblink import *
 from math import *
@@ -19,6 +20,21 @@ class MyRob(CRobLinkAngs):
     def printMap(self):
         for l in reversed(self.labMap):
             print(''.join([str(l) for l in l]))
+
+    """ 
+    This function receives the sensor line array and returns an integer value 
+        - positive value -> right array is predominant -> the robot must turn right
+        - negative value -> left array is predominant -> the robot must turn left
+        - zero -> right and left arrays are balanced -> the robot keeps going forward
+    """
+    def calculate_ones(self, line):
+
+        ones_right = line[0:4].count("1")
+        ones_left = line[3:7].count("1")
+
+        print("diferenca: ", ones_right-ones_left)
+
+        return ones_right-ones_left
 
     def run(self):
         if self.status != 0:
@@ -57,18 +73,42 @@ class MyRob(CRobLinkAngs):
             #O BUFFER AINDA NÃO ESTÁ A SER USADO
             buffer = line
 
-            if line[2] == "1" and line[3] == "1" and line[4] == "1":
-                self.driveMotors(NORMAL_SPEED,NORMAL_SPEED)
-                print("going forward")
-            elif line[4] == "0" and line[5] == "0" and line[6] == "0":
+            """
+            valor = self.calculate_ones(line)
+
+            if valor<0:
                 self.driveMotors(-TURNING_SPEED,TURNING_SPEED)
                 print("c left")
-            elif line[0] == "0" and line[1] == "0" and line[2] == "0":
+            elif valor>0:
                 self.driveMotors(TURNING_SPEED,-TURNING_SPEED)
                 print("c right")
+            else:
+                self.driveMotors(NORMAL_SPEED,NORMAL_SPEED)
+                print("going forward")
+            continue 
+            """
+
+            if line[2] == "1" and line[3] == "1" and line[4] == "1":
+                self.driveMotors(NORMAL_SPEED,NORMAL_SPEED)
+                #print("going forward")
+            elif line[4] == "0" and line[5] == "0" and line[6] == "0":
+                self.driveMotors(-TURNING_SPEED,TURNING_SPEED)
+                #print("c left")
+            elif line[0] == "0" and line[1] == "0" and line[2] == "0":
+                self.driveMotors(TURNING_SPEED,-TURNING_SPEED)
+                #print("c right")
+                """             elif line[4] == "1" and line[5] == "0" and line[6] == "0":
+                    self.driveMotors(TURNING_SPEED,-TURNING_SPEED)
+                    print("c left")
+                    #continue
+                elif line[0] == "0" and line[1] == "0" and line[2] == "1":
+
+                    self.driveMotors(-TURNING_SPEED,TURNING_SPEED)
+                    print("c right")
+                    #continue """
             else: 
                 self.driveMotors(0.0,0.0)
-                print("stop!")
+                #print("stop!")
             continue
             
             if self.measures.endLed:
