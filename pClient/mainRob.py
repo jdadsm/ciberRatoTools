@@ -32,11 +32,19 @@ class MyRob(CRobLinkAngs):
         ones_right = line[0:4].count("1")
         ones_left = line[3:7].count("1")
 
-        print("diferenca: ", ones_right-ones_left)
+        #print("diferenca: ", ones_right-ones_left)
 
         return ones_right-ones_left
 
+    def PID_controller(self):
+
+        pass
+
     def run(self):
+
+        Kp = 10;
+        BANG_VALUE = 0.2;
+
         if self.status != 0:
             print("Connection refused or error")
             quit()
@@ -44,9 +52,9 @@ class MyRob(CRobLinkAngs):
         state = 'stop'
         stopped_state = 'run'
 
-        TURNING_SPEED = 0.1
-        NORMAL_SPEED = 0.08
-        
+        TURNING_SPEED = 0.05
+        NORMAL_SPEED = 0.07
+        ZEROS = ["0","0","0","0","0","0","0"]        
         buffer = ["0","0","1","1","1","0","0"]
         
         while True:
@@ -55,7 +63,7 @@ class MyRob(CRobLinkAngs):
             
             line = self.measures.lineSensor
             
-            #ISTO É SÓ PARA SABER QUANDO HÁ NOISE POR AGORA
+            """             #ISTO É SÓ PARA SABER QUANDO HÁ NOISE POR AGORA
             ones = 0
             zeros = 0
             for i in line:
@@ -65,52 +73,37 @@ class MyRob(CRobLinkAngs):
                     zeros+=1
             if ones != 3:
                 if abs(ones-3) > 1:
-                    line = buffer
+                    line = buffer """
                 #print("\nNoise\nOnes-"+str(ones)+"\nZeros-"+str(zeros))
-            
             
             print("Line:",line)
             #O BUFFER AINDA NÃO ESTÁ A SER USADO
-            buffer = line
-
-            """
-            valor = self.calculate_ones(line)
-
-            if valor<0:
-                self.driveMotors(-TURNING_SPEED,TURNING_SPEED)
-                print("c left")
-            elif valor>0:
-                self.driveMotors(TURNING_SPEED,-TURNING_SPEED)
-                print("c right")
-            else:
-                self.driveMotors(NORMAL_SPEED,NORMAL_SPEED)
-                print("going forward")
-            continue 
-            """
-
-            if line[2] == "1" and line[3] == "1" and line[4] == "1":
-                self.driveMotors(NORMAL_SPEED,NORMAL_SPEED)
-                #print("going forward")
-            elif line[4] == "0" and line[5] == "0" and line[6] == "0":
-                self.driveMotors(-TURNING_SPEED,TURNING_SPEED)
-                #print("c left")
-            elif line[0] == "0" and line[1] == "0" and line[2] == "0":
-                self.driveMotors(TURNING_SPEED,-TURNING_SPEED)
-                #print("c right")
-                """             elif line[4] == "1" and line[5] == "0" and line[6] == "0":
-                    self.driveMotors(TURNING_SPEED,-TURNING_SPEED)
-                    print("c left")
-                    #continue
-                elif line[0] == "0" and line[1] == "0" and line[2] == "1":
-
-                    self.driveMotors(-TURNING_SPEED,TURNING_SPEED)
-                    print("c right")
-                    #continue """
-            else: 
-                self.driveMotors(0.0,0.0)
-                #print("stop!")
-            continue
             
+            #CASO PARA CURVAS APERTADAS
+            if line == ZEROS: 
+                val = self.calculate_ones(buffer)
+                if val > 0: 
+                    self.driveMotors(0.15,-0.15)
+                else:
+                    self.driveMotors(-0.15,0.15)
+                continue
+            
+            buffer = line
+            
+            error = self.calculate_ones(line)
+
+            r = 0.05*error
+            #l = (3 - abs(valor))*0.05 #DEPOIS MUDAR!
+            if (error==0):
+                self.driveMotors(0.15,0.15)
+            else:
+                self.driveMotors(-r, r)
+            
+            #print("r: " + str(r) + " \n l: " + str(l))
+
+            
+            continue
+
             if self.measures.endLed:
                 print(self.robName + " exiting")
                 quit()
