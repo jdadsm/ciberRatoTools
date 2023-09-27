@@ -32,13 +32,38 @@ class MyRob(CRobLinkAngs):
         ones_right = line[0:4].count("1")
         ones_left = line[3:7].count("1")
 
-        #print("diferenca: ", ones_right-ones_left)
-
         return ones_right-ones_left
 
     def PID_controller(self):
 
         pass
+
+    """this function takes an orientation value and converts it to a number from 0 to 4:
+        0 -> horizontal line                    -
+        1 -> vertical line                      | 
+        2 -> oblique line (tan is positive)     /
+        3 -> oblique line (tan is negative)     \
+        4 -> empty (should not be returned under any circunstance)
+    """
+    def check_direction(self, ori):
+
+        if ori < -180 or ori > 180:
+            print("out of bounds")
+            return 4
+
+        if (ori <= 22.5 and ori >= -22.5) or (ori >= 157.5 and ori <= -157.5):
+            return 0
+        elif (ori <= -67.5 and ori >= -112.5) or (ori >= 67.5 and ori <= 112.5):
+            return 1
+        elif (ori < -112.5 and ori > -157.5) or (ori > 22.5 and ori < 67.5):
+            return 2
+        elif (ori < -22.5 and ori > -67.5) or (ori > 112.5 and ori < 157.5):
+            return 3
+        else:
+            print("Orientation was not found...")
+            return 4
+        pass
+        
 
     def run(self):
 
@@ -52,16 +77,25 @@ class MyRob(CRobLinkAngs):
         state = 'stop'
         stopped_state = 'run'
 
-        TURNING_SPEED = 0.05
-        NORMAL_SPEED = 0.07
+        #posicao inical do carro -> I
+        self.readSensors()
+        pos_inicial_real = [self.measures.x, self.measures.y]
+
         ZEROS = ["0","0","0","0","0","0","0"]        
         buffer = ["0","0","1","1","1","0","0"]
         
         while True:
             self.readSensors()
             
-            
             line = self.measures.lineSensor
+            sensor = self.measures.compass #compasso - em graus 
+
+            """cada quadrado tem 2 unidades de medida -> verificar qual a orientacao no meio de cada quadrado"""
+            x = self.measures.x - pos_inicial_real[0]
+            y = self.measures.y - pos_inicial_real[1]
+
+            print(str(self.check_direction(sensor)))
+            print("x: " + str(x) + ", y: " + str(y))
             
             """             #ISTO É SÓ PARA SABER QUANDO HÁ NOISE POR AGORA
             ones = 0
@@ -83,9 +117,9 @@ class MyRob(CRobLinkAngs):
             if line == ZEROS: 
                 val = self.calculate_ones(buffer)
                 if val > 0: 
-                    self.driveMotors(0.15,-0.15)
+                    self.driveMotors(0.45,-0.45)
                 else:
-                    self.driveMotors(-0.15,0.15)
+                    self.driveMotors(-0.45,0.45)
                 continue
             
             buffer = line
@@ -95,16 +129,13 @@ class MyRob(CRobLinkAngs):
             r = 0.05*error
             #l = (3 - abs(valor))*0.05 #DEPOIS MUDAR!
             if (error==0):
-                self.driveMotors(0.15,0.15)
+                self.driveMotors(0.20,0.20)
             else:
                 self.driveMotors(-r, r)
             
             #print("r: " + str(r) + " \n l: " + str(l))
 
-            
-            continue
-
-            if self.measures.endLed:
+            """if self.measures.endLed:
                 print(self.robName + " exiting")
                 quit()
 
@@ -133,8 +164,11 @@ class MyRob(CRobLinkAngs):
                     self.setVisitingLed(False)
                 if self.measures.returningLed==True:
                     self.setReturningLed(False)
-                self.wander()
-            
+                self.wander()"""
+
+    def write_to_file(self):
+        file = open("map_c2.map")
+        pass    
 
     def wander(self):
         center_id = 0
@@ -156,6 +190,8 @@ class MyRob(CRobLinkAngs):
         else:
             print('Go')
             self.driveMotors(0.1,0.1)
+
+
 
 class Map():
     def __init__(self, filename):
