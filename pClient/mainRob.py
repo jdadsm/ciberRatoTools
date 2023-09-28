@@ -38,30 +38,53 @@ class MyRob(CRobLinkAngs):
 
         pass
 
-    """this function takes an orientation value and converts it to a number from 0 to 4:
-        0 -> horizontal line                    -
-        1 -> vertical line                      | 
-        2 -> oblique line (tan is positive)     /
-        3 -> oblique line (tan is negative)     \
-        4 -> empty (should not be returned under any circunstance)
+    def print_map(self):
+        for line in reversed(self.map):
+            for element in line:
+                if element == 0:
+                    print(" ", end = "")
+                else:
+                    print(element, end="")
+            print()
+
+        pass
+
+    def print_map_to_file(self):
+        file = open("map_c2.map", "w") #write to file
+        for line in reversed(self.map):
+            for element in line:
+                if element == 0:
+                    file.write(" ")
+                else:
+                    file.write(element)
+            file.write('\n')
+        file.close()
+        pass
+
+    """this function takes an orientation value and converts it to a orientation:
+        - -> horizontal line                    -
+        | -> vertical line                      | 
+        / -> oblique line (tan is positive)     /
+        \ -> oblique line (tan is negative)     \
+        0 -> empty (should not be returned under any circunstance)
     """
     def check_direction(self, ori):
 
         if ori < -180 or ori > 180:
             print("out of bounds")
-            return 4
-
-        if (ori <= 22.5 and ori >= -22.5) or (ori >= 157.5 and ori <= -157.5):
             return 0
+
+        if (ori <= 22.5 and ori >= -22.5) or (ori >= 157.5 and ori <= 180) or (ori>=180 or ori<=-157.5):
+            return '-'
         elif (ori <= -67.5 and ori >= -112.5) or (ori >= 67.5 and ori <= 112.5):
-            return 1
+            return '|'
         elif (ori < -112.5 and ori > -157.5) or (ori > 22.5 and ori < 67.5):
-            return 2
+            return '/'
         elif (ori < -22.5 and ori > -67.5) or (ori > 112.5 and ori < 157.5):
-            return 3
+            return chr(92) # \ character
         else:
-            print("Orientation was not found...")
-            return 4
+            print("Orientation interval was not found...")
+            return 0
         pass
         
 
@@ -73,6 +96,8 @@ class MyRob(CRobLinkAngs):
         if self.status != 0:
             print("Connection refused or error")
             quit()
+
+        self.initialize_map()
 
         state = 'stop'
         stopped_state = 'run'
@@ -94,8 +119,9 @@ class MyRob(CRobLinkAngs):
             x = self.measures.x - pos_inicial_real[0]
             y = self.measures.y - pos_inicial_real[1]
 
-            print(str(self.check_direction(sensor)))
-            print("x: " + str(x) + ", y: " + str(y))
+            #print(str(self.check_direction(sensor)))
+            #print("x: " + str(x) + ", y: " + str(y))
+            orientation = self.check_direction(sensor)
             
             """             #ISTO É SÓ PARA SABER QUANDO HÁ NOISE POR AGORA
             ones = 0
@@ -110,7 +136,7 @@ class MyRob(CRobLinkAngs):
                     line = buffer """
                 #print("\nNoise\nOnes-"+str(ones)+"\nZeros-"+str(zeros))
             
-            print("Line:",line)
+            #print("Line:",line)
             #O BUFFER AINDA NÃO ESTÁ A SER USADO
             
             #CASO PARA CURVAS APERTADAS
@@ -132,10 +158,21 @@ class MyRob(CRobLinkAngs):
                 self.driveMotors(0.20,0.20)
             else:
                 self.driveMotors(-r, r)
+
             
+            if (orientation != "-" and orientation != "|"):
+                if(round(x)%2 == 1 and round(y)%2 == 1):
+                    self.put_in_map(round(x), round(y), orientation)
+                    self.print_map_to_file()
+            else:
+                if (round(x)%2 == 1 or round(y)%2 == 1):
+                    self.put_in_map(round(x), round(y), orientation)
+                    self.print_map_to_file()
+
+        
             #print("r: " + str(r) + " \n l: " + str(l))
 
-            """if self.measures.endLed:
+            """ if self.measures.endLed:
                 print(self.robName + " exiting")
                 quit()
 
@@ -164,11 +201,29 @@ class MyRob(CRobLinkAngs):
                     self.setVisitingLed(False)
                 if self.measures.returningLed==True:
                     self.setReturningLed(False)
-                self.wander()"""
+                self.wander() """
 
-    def write_to_file(self):
-        file = open("map_c2.map")
-        pass    
+    """put an oritentation in a certain position in the map"""
+    def put_in_map(self, x, y, orientation):
+        x_map = 24 + x
+        y_map = 10 + y
+        print("orientation: ",orientation)
+        print("x: " + str(x), "y: " + str(y))
+        self.map[y_map][x_map] = orientation
+
+    """
+        initialize map with the same characterists as the map that should be printed
+        I is in the middle of the map -> position [24, 11] (should need to verify this)!!
+    """
+    def initialize_map(self):
+        lines = 21
+        columns = 49
+
+        self.map = [[0 for x in range(columns)] for y in range(lines)] #melhor fazer com variavel global...
+
+        self.map[10][24] = "I"
+        #print(self.map)
+        return 
 
     def wander(self):
         center_id = 0
