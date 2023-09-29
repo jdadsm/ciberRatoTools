@@ -107,9 +107,7 @@ class MyRob(CRobLinkAngs):
         pos_inicial_real = [self.measures.x, self.measures.y]
 
         ZEROS = ["0","0","0","0","0","0","0"]        
-        
-        BUFF
-        buffer = 
+        buffer = ["0","0","1","1","1","0","0"]
         
         while True:
             self.readSensors()
@@ -124,22 +122,7 @@ class MyRob(CRobLinkAngs):
             #print(str(self.check_direction(sensor)))
             #print("x: " + str(x) + ", y: " + str(y))
             orientation = self.check_direction(sensor)
-            
-            """             #ISTO É SÓ PARA SABER QUANDO HÁ NOISE POR AGORA
-            ones = 0
-            zeros = 0
-            for i in line:
-                if i == "1":
-                    ones+=1
-                else:
-                    zeros+=1
-            if ones != 3:
-                if abs(ones-3) > 1:
-                    line = buffer """
-                #print("\nNoise\nOnes-"+str(ones)+"\nZeros-"+str(zeros))
-            
-            #print("Line:",line)
-            #O BUFFER AINDA NÃO ESTÁ A SER USADO
+            print(orientation)
             
             #CASO PARA CURVAS APERTADAS
             if line == ZEROS: 

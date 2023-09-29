@@ -28,11 +28,12 @@ class MyRob(CRobLinkAngs):
         - zero -> right and left arrays are balanced -> the robot keeps going forward
     """
     def calculate_ones(self, line):
-
-        ones_right = line[0:4].count("1")
-        ones_left = line[3:7].count("1")
-
-        return ones_right-ones_left
+        
+        ones_left = line[0:4].count("1")
+        ones_right = line[3:7].count("1")
+        #print(line)
+        #print(ones_right-ones_left)
+        return ones_left-ones_right
 
     def PID_controller(self):
 
@@ -106,11 +107,13 @@ class MyRob(CRobLinkAngs):
         self.readSensors()
         pos_inicial_real = [self.measures.x, self.measures.y]
 
-        ZEROS = ["0","0","0","0","0","0","0"]        
-        
-        BUFF
-        buffer = 
-        
+        ZEROS = ["0","0","0","0","0","0","0"]  
+        BUFFER_DEFAULT = ["0","0","1","1","1","0","0"]      
+        BUFFER_SIZE = 4
+        buffer = []
+        for i in range(BUFFER_SIZE):
+            buffer.append(BUFFER_DEFAULT)
+            
         while True:
             self.readSensors()
             
@@ -139,18 +142,28 @@ class MyRob(CRobLinkAngs):
                 #print("\nNoise\nOnes-"+str(ones)+"\nZeros-"+str(zeros))
             
             #print("Line:",line)
-            #O BUFFER AINDA NÃO ESTÁ A SER USADO
             
             #CASO PARA CURVAS APERTADAS
-            if line == ZEROS: 
-                val = self.calculate_ones(buffer)
+            if line == ZEROS:
+                val = 0
+                for entry in buffer:
+                    temp = self.calculate_ones(entry)
+                    print(temp)
+                    val+= temp 
+                    #val+= self.calculate_ones(entry)
+                    
+                print(buffer)
+                print("CURVAS:",val)
                 if val > 0: 
                     self.driveMotors(0.45,-0.45)
-                else:
+                elif val < 0:
                     self.driveMotors(-0.45,0.45)
+                else:
+                    self.driveMotors(0.0,0.0)
                 continue
             
-            buffer = line
+            buffer = buffer[0:BUFFER_SIZE]
+            buffer = [line] + buffer
             
             error = self.calculate_ones(line)
 
