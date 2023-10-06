@@ -108,8 +108,7 @@ class MyRob(CRobLinkAngs):
 
         ZEROS = ["0","0","0","0","0","0","0"]        
         
-        BUFF
-        buffer = 
+        buffer = []
         
         while True:
             self.readSensors()

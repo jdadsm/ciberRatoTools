@@ -11,6 +11,17 @@ CELLCOLS=14
 class MyRob(CRobLinkAngs):
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
+        self.h = 0.050
+
+        self.Kp = 1
+        self.Ti = 1/self.h
+        self.Td = 1*self.h
+
+        self.e_m1 = 0
+        self.e_m2 = 0
+        self.u_m1 = 0
+
+        self.max_u = 10
 
     # In this map the center of cell (i,j), (i in 0..6, j in 0..13) is mapped to labMap[i*2][j*2].
     # to know if there is a wall on top of cell(i,j) (i in 0..5), check if the value of labMap[i*2+1][j*2] is space or not
@@ -28,11 +39,12 @@ class MyRob(CRobLinkAngs):
         - zero -> right and left arrays are balanced -> the robot keeps going forward
     """
     def calculate_ones(self, line):
-
-        ones_right = line[0:4].count("1")
-        ones_left = line[3:7].count("1")
-
-        return ones_right-ones_left
+        
+        ones_left = line[0:4].count("1")
+        ones_right = line[3:7].count("1")
+        #print(line)
+        #print(ones_right-ones_left)
+        return ones_left-ones_right
 
     def PID_controller(self):
 
@@ -85,115 +97,13 @@ class MyRob(CRobLinkAngs):
         else:
             print("Orientation interval was not found...")
             return 0
-        pass
         
-
-    def run(self):
-
-        Kp = 10;
-        BANG_VALUE = 0.2;
-
-        if self.status != 0:
-            print("Connection refused or error")
-            quit()
-
-        self.initialize_map()
-
-        state = 'stop'
-        stopped_state = 'run'
-
-        #posicao inical do carro -> I
-        self.readSensors()
-        pos_inicial_real = [self.measures.x, self.measures.y]
-
-        ZEROS = ["0","0","0","0","0","0","0"]        
-        buffer = ["0","0","1","1","1","0","0"]
-        
-        while True:
-            self.readSensors()
-            
-            line = self.measures.lineSensor
-            sensor = self.measures.compass #compasso - em graus 
-
-            """cada quadrado tem 2 unidades de medida -> verificar qual a orientacao no meio de cada quadrado"""
-            x = self.measures.x - pos_inicial_real[0]
-            y = self.measures.y - pos_inicial_real[1]
-
-            #print(str(self.check_direction(sensor)))
-            #print("x: " + str(x) + ", y: " + str(y))
-            orientation = self.check_direction(sensor)
-            print(orientation)
-            
-            #CASO PARA CURVAS APERTADAS
-            if line == ZEROS: 
-                val = self.calculate_ones(buffer)
-                if val > 0: 
-                    self.driveMotors(0.45,-0.45)
-                else:
-                    self.driveMotors(-0.45,0.45)
-                continue
-            
-            buffer = line
-            
-            error = self.calculate_ones(line)
-
-            r = 0.05*error
-            #l = (3 - abs(valor))*0.05 #DEPOIS MUDAR!
-            if (error==0):
-                self.driveMotors(0.20,0.20)
-            else:
-                self.driveMotors(-r, r)
-
-            
-            if (orientation != "-" and orientation != "|"):
-                if(round(x)%2 == 1 and round(y)%2 == 1):
-                    self.put_in_map(round(x), round(y), orientation)
-                    self.print_map_to_file()
-            else:
-                if (round(x)%2 == 1 or round(y)%2 == 1):
-                    self.put_in_map(round(x), round(y), orientation)
-                    self.print_map_to_file()
-
-        
-            #print("r: " + str(r) + " \n l: " + str(l))
-
-            """ if self.measures.endLed:
-                print(self.robName + " exiting")
-                quit()
-
-            if state == 'stop' and self.measures.start:
-                state = stopped_state
-
-            if state != 'stop' and self.measures.stop:
-                stopped_state = state
-                state = 'stop'
-
-            if state == 'run':
-                if self.measures.visitingLed==True:
-                    state='wait'
-                if self.measures.ground==0:
-                    self.setVisitingLed(True);
-                self.wander()
-            elif state=='wait':
-                self.setReturningLed(True)
-                if self.measures.visitingLed==True:
-                    self.setVisitingLed(False)
-                if self.measures.returningLed==True:
-                    state='return'
-                self.driveMotors(0.0,0.0)
-            elif state=='return':
-                if self.measures.visitingLed==True:
-                    self.setVisitingLed(False)
-                if self.measures.returningLed==True:
-                    self.setReturningLed(False)
-                self.wander() """
-
     """put an oritentation in a certain position in the map"""
     def put_in_map(self, x, y, orientation):
         x_map = 24 + x
         y_map = 10 + y
-        print("orientation: ",orientation)
-        print("x: " + str(x), "y: " + str(y))
+        #print("orientation: ",orientation)
+        #print("x: " + str(x), "y: " + str(y))
         self.map[y_map][x_map] = orientation
 
     """
@@ -208,29 +118,143 @@ class MyRob(CRobLinkAngs):
 
         self.map[10][24] = "I"
         #print(self.map)
-        return 
-
-    def wander(self):
-        center_id = 0
-        left_id = 1
-        right_id = 2
-        back_id = 3
-        if    self.measures.irSensor[center_id] > 5.0\
-           or self.measures.irSensor[left_id]   > 5.0\
-           or self.measures.irSensor[right_id]  > 5.0\
-           or self.measures.irSensor[back_id]   > 5.0:
-            print('Rotate left')
-            self.driveMotors(-0.1,+0.1)
-        elif self.measures.irSensor[left_id]> 2.7:
-            print('Rotate slowly right')
-            self.driveMotors(0.1,0.0)
-        elif self.measures.irSensor[right_id]> 2.7:
-            print('Rotate slowly left')
-            self.driveMotors(0.0,0.1)
+    
+    def PID(self,r,y):
+        u = 0
+        
+        K0 = self.Kp*(1+self.h/self.Ti+self.Td/self.h)
+        K1 = -self.Kp*(1+2*self.Td/self.h)
+        K2 = self.Kp*self.Td/self.h
+        
+        e = r-y
+        
+        u = self.u_m1 + K0*e + K1*self.e_m1 + K2*self.e_m2
+            
+        self.e_m2 = self.e_m1
+        self.e_m1 = e
+        self.u_m1 = u
+        
+        if u > self.max_u:
+            u = self.max_u
+        if u < -self.max_u:
+            u = -self.max_u
+            
+        #print("u:",u)
+        return u
+    
+    def getLinePos(self,line):
+        posOverLine = 0
+        nActiveSensors = 0
+        
+        for i in range(7):
+            if line[i] == "1":
+                posOverLine += i-3
+                nActiveSensors+=1
+        
+        if nActiveSensors != 0:
+            posOverLine = 0.08*posOverLine/nActiveSensors
         else:
-            print('Go')
-            self.driveMotors(0.1,0.1)
+            return None
+        
+        return posOverLine
+    
+    def get_objective(self, ori):
+        if ori < -180 or ori > 180:
+            print("out of bounds")
+            return 0
+        
+        if (ori <= 22.5 and ori>=0) or (ori<=0 and ori>=-22.5):
+            return 1
+        elif (ori >= 22.5 and ori <= 67.5):
+            return 2
+        elif (ori >= 67.5 and ori <= 112.5):
+            return 3
+        elif (ori >= 112.5 and ori <= 157.5):
+            return 4
+        elif (ori>=157.5 and ori<= 180) or (ori<=-157.5 and ori>=-180):
+            return 5
+        elif (ori>=-157.5 and ori<=-112.5):
+            return 6
+        elif (ori>=-112.5 and ori<=-67.5):
+            return 7
+        elif (ori>=67.5 and ori<=-22.5):
+            return 8
+        else:
+            print("Orientation interval was not found...")
+            return 0
 
+    def run(self):
+
+        if self.status != 0:
+            print("Connection refused or error")
+            quit()
+
+        self.initialize_map()
+
+        #posicao inical do carro -> I
+        self.readSensors()
+        pos_inicial_real = [self.measures.x, self.measures.y]
+
+        ZEROS = ["0","0","0","0","0","0","0"]
+        BUFFER_DEFAULT = ["0","0","1","1","1","0","0"]      
+        BUFFER_SIZE = 4
+        buffer = []
+        
+        for i in range(BUFFER_SIZE):
+            buffer.append(BUFFER_DEFAULT)
+            
+        velSetPoint = 0.15
+            
+        while True:
+            self.readSensors()
+            
+            line = self.measures.lineSensor
+            sensor = self.measures.compass #compasso - em graus 
+            #print("Orientation:",sensor)
+
+            """cada quadrado tem 2 unidades de medida -> verificar qual a orientacao no meio de cada quadrado"""
+            x = self.measures.x - pos_inicial_real[0]
+            y = self.measures.y - pos_inicial_real[1]
+
+            #print(str(self.check_direction(sensor)))
+            #print("x: " + str(x) + ", y: " + str(y))
+            orientation = self.check_direction(sensor)
+            
+            #obj = 
+            
+            posOverLine = self.getLinePos(line)
+            
+            print("posOverLine:",posOverLine)
+            
+            buffer = buffer[0:BUFFER_SIZE]
+            buffer = [line] + buffer
+            
+            lPow = velSetPoint - self.PID(0,(sensor)/180)
+            rPow = velSetPoint + self.PID(0,sensor/180)
+            
+            self.driveMotors(lPow,rPow)
+            
+            #print("orientation:",orientation)
+            print(sensor)
+
+            if x%2 == 0 and y%2 == 0:
+                print(buffer)
+                self.driveMotors(0.04,0.04)
+                
+            if line == ZEROS:
+                print(buffer)
+                self.driveMotors(0.0,0.0)
+            
+            
+            
+            if (orientation != "-" and orientation != "|"):
+                if(round(x)%2 == 1 and round(y)%2 == 1):
+                    self.put_in_map(round(x), round(y), orientation)
+                    self.print_map_to_file()
+            else:
+                if (round(x)%2 == 1 or round(y)%2 == 1):
+                    self.put_in_map(round(x), round(y), orientation)
+                    self.print_map_to_file()
 
 
 class Map():
