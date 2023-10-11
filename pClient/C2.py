@@ -23,6 +23,8 @@ class MyRob(CRobLinkAngs):
 
         self.max_u = 10
 
+        self.vertices = {}
+
     # In this map the center of cell (i,j), (i in 0..6, j in 0..13) is mapped to labMap[i*2][j*2].
     # to know if there is a wall on top of cell(i,j) (i in 0..5), check if the value of labMap[i*2+1][j*2] is space or not
     def setMap(self, labMap):
@@ -46,9 +48,6 @@ class MyRob(CRobLinkAngs):
         #print(ones_right-ones_left)
         return ones_left-ones_right
 
-    def PID_controller(self):
-
-        pass
 
     def print_map(self):
         for line in reversed(self.map):
@@ -98,7 +97,6 @@ class MyRob(CRobLinkAngs):
             print("Orientation interval was not found...")
             return 0
         
-    """put an oritentation in a certain position in the map"""
     def put_in_map(self, x, y, orientation):
         x_map = 24 + x
         y_map = 10 + y
@@ -106,10 +104,6 @@ class MyRob(CRobLinkAngs):
         #print("x: " + str(x), "y: " + str(y))
         self.map[y_map][x_map] = orientation
 
-    """
-        initialize map with the same characterists as the map that should be printed
-        I is in the middle of the map -> position [24, 11] (should need to verify this)!!
-    """
     def initialize_map(self):
         lines = 21
         columns = 49
@@ -117,7 +111,6 @@ class MyRob(CRobLinkAngs):
         self.map = [[0 for x in range(columns)] for y in range(lines)] #melhor fazer com variavel global...
 
         self.map[10][24] = "I"
-        #print(self.map)
     
     def PID(self,r,y):
         u = 0
@@ -158,30 +151,119 @@ class MyRob(CRobLinkAngs):
         
         return posOverLine
     
-    def get_objective(self, ori):
-        if ori < -180 or ori > 180:
-            print("out of bounds")
-            return 0
+    def get_orientation_def(self, ori):
+
+        if ori < -180:
+            return self.get_orientation_def(ori+360)
+        elif ori>180:
+            return self.get_orientation_def(ori-360)
         
         if (ori <= 22.5 and ori>=0) or (ori<=0 and ori>=-22.5):
-            return 1
+            return 0
         elif (ori >= 22.5 and ori <= 67.5):
-            return 2
+            return 45
         elif (ori >= 67.5 and ori <= 112.5):
-            return 3
+            return 90
         elif (ori >= 112.5 and ori <= 157.5):
-            return 4
+            return 135
         elif (ori>=157.5 and ori<= 180) or (ori<=-157.5 and ori>=-180):
-            return 5
+            return 180
         elif (ori>=-157.5 and ori<=-112.5):
-            return 6
+            return -135
         elif (ori>=-112.5 and ori<=-67.5):
-            return 7
-        elif (ori>=67.5 and ori<=-22.5):
-            return 8
+            return -90
+        elif (ori>=-67.5 and ori<=-22.5):
+            return -45
         else:
             print("Orientation interval was not found...")
             return 0
+
+    def check_buffer_orientation(self, buffer, right):
+        # intersecoes retas
+        if buffer.count(['1', '1']) == len(buffer) and len(buffer)>=2:
+            if right:
+                return -90
+            else:
+                return 90
+
+        # intersecoes diagonais
+        if buffer[0] == ['0', '1']:
+            if buffer[1] == ['1', '1']:
+                if right:
+                    print("here")
+                    return -45
+                else:
+                    return 135
+
+            if buffer[1] == buffer[0]:
+                self.check_buffer_orientation(buffer[1:], right)
+                pass
+
+        elif buffer[0] == ['1', '0']:
+            if buffer[1] == ['1', '1']:
+                if right:
+                    return -135
+                else:
+                    return 45
+        
+        elif buffer[0] == ['1', '1']: 
+            if buffer[1] == ['1', '0']:
+                if right:
+                    return -45
+                else:
+                    return 135
+
+            if buffer[1] == ['0', '1']:
+                if right:
+                    return -135
+                else:
+                    return 45 
+
+            if buffer[1] == buffer[0]:
+                self.check_buffer_orientation(buffer[1:], right)
+            pass
+
+        return None
+
+    def check_intersection_type(self, buffer, ori, x, y):
+
+        if str([x, y]) in self.vertices.keys():
+            return
+
+        buffert = [line[2:5] for line in buffer].count(['1', '1', '1'])
+
+        buffleft = [line[0:2] for line in buffer if line[0:2]!=['0', '0']]
+        buffright = [line[5:7] for line in buffer if line[5:7]!=['0', '0']]
+
+        if buffleft == [] and buffright == []:
+            return
+
+        # casos for left side -> fazer nova funcao maybe?
+        if len(buffleft) > 1:
+            left_int = self.check_buffer_orientation(buffleft, False)
+            true_int1 = self.get_orientation_def(left_int+ori)
+            print("left int: " + str(left_int))
+            print("left real: " + str(true_int1))
+        if len(buffright) > 1:
+            right_int = self.check_buffer_orientation(buffright, True)
+            true_int2 = self.get_orientation_def(right_int+ori)
+            print("right int: " + str(right_int))
+            print("right real: " + str(true_int2))
+        
+
+
+        #print("buffer left: " + str(buffleft))
+        #print("buffer right: " + str(buffright))
+#
+        #print("len r: " + str(len(buffright)))
+        #print("len l: " + str(len(buffleft)))
+
+        if buffert == 5:
+            print("path forward, ori is " + str(ori))
+        else:
+            print("must turn")
+        #print(buffert)
+        pass
 
     def run(self):
 
@@ -204,6 +286,11 @@ class MyRob(CRobLinkAngs):
             buffer.append(BUFFER_DEFAULT)
             
         velSetPoint = 0.15
+
+        #this should always be 0 at the beginning
+        sensor = self.measures.compass
+        current_orientation = self.get_orientation_def(sensor)
+        print(current_orientation)
             
         while True:
             self.readSensors()
@@ -220,32 +307,36 @@ class MyRob(CRobLinkAngs):
             #print("x: " + str(x) + ", y: " + str(y))
             orientation = self.check_direction(sensor)
             
-            #obj = 
-            
             posOverLine = self.getLinePos(line)
             
-            print("posOverLine:",posOverLine)
+            #print("posOverLine:",posOverLine)
             
             buffer = buffer[0:BUFFER_SIZE]
             buffer = [line] + buffer
             
-            lPow = velSetPoint - self.PID(0,(sensor)/180)
+            #ajustar PID ajuda a ficar mais direito -> melhor amostras
+            lPow = velSetPoint - self.PID(0,sensor/180)
             rPow = velSetPoint + self.PID(0,sensor/180)
             
+            #print("lpow: " + str(lPow))
+            #print("rpow: " + str(rPow))
+
             self.driveMotors(lPow,rPow)
             
             #print("orientation:",orientation)
-            print(sensor)
-
-            if x%2 == 0 and y%2 == 0:
-                print(buffer)
+            #print("x " + str(x))
+            #print("y " + str(y))
+            
+            if (x%2 >= 1.8 or x%2 <= 0.1) and (y%2 >= 1.8 or y%2 <= 0.1):
+                print("buffer " +  str(buffer))
+                print("h")
                 self.driveMotors(0.04,0.04)
+                self.check_intersection_type(buffer, sensor, round(x), round(y))
                 
             if line == ZEROS:
                 print(buffer)
                 self.driveMotors(0.0,0.0)
-            
-            
+                continue
             
             if (orientation != "-" and orientation != "|"):
                 if(round(x)%2 == 1 and round(y)%2 == 1):
