@@ -222,21 +222,10 @@ class MyRob(CRobLinkAngs):
                 return self.check_buffer_orientation(buffer[1:], right)
             pass
 
-        return None
-
-    def put_intersection(self, x, y, value):
-
-        print("value: " + str(value))
-        print("x: " + str(x))
-        print("y: " + str(y))
-
-        if str([x, y]) not in self.dict: 
-            self.dict[str([x, y])] = [value]
-        elif value not in self.dict[str([x, y])]:
-            self.dict[str([x, y])].append(value)
+        return ""
 
 
-    def check_intersection_type(self, buffertemp, ori, x, y):
+    def check_intersection_type(self, buffertemp, ori, x, y, current):
 
         buffer = [line for line in buffertemp if line!=['0', '0', '0', '0', '0', '0', '0']]
 
@@ -248,42 +237,41 @@ class MyRob(CRobLinkAngs):
         buffleft = [line[0:2] for line in buffer if line[0:2]!=['0', '0']]
         buffright = [line[5:7] for line in buffer if line[5:7]!=['0', '0']]
 
-        tvertice = None
+        vertice = None
 
         if self.vertices != []:
-            for vertice in self.vertices:
-                if vertice.check_xy(x, y):      #there is already a vertice with those coordinates
-                    tvertice = vertice
+            for tvertice in self.vertices:
+                if tvertice.check_xy(x, y):      #there is already a vertice with those coordinates
+                    vertice = tvertice
+
+        if vertice != None:                     # no need to execute further code, data is already inside the lists
+            return current
+
+        vertice = Intersection(x, y)
 
         #backwards
         list = []
 
         if buffert == len(buffer):      #segue em frente
             list.append(ori)
-            #self.put_intersection(x, y, ori)              
 
         if len(buffleft) > 1:
             true_int1 = self.get_orientation_def(self.check_buffer_orientation(buffleft, False)+ori)
             list.append(true_int1)
-            #self.put_intersection(x, y, true_int1)  
 
         if len(buffright) > 1:
             true_int2 = self.get_orientation_def(self.check_buffer_orientation(buffright, True)+ori)
-            list.append(true_int2)
-            #self.put_intersection(x, y, true_int2)  
+            list.append(true_int2)  
 
+        # by now, the list should be filled with all intersections in a given point 
+        # the first of those intersections to have 0, 90, 180, -90 should be considered "anchors" and the up, down, left and right positions should depend on them 
 
-        if tvertice == None:
-            tvertice = Intersection(x, y)
-            self.vertices.append(tvertice)
-        else:
-            self.vertices.remove(tvertice)
-            tvertice.add_all_intersections(list)
-            pass
+        list.sort()
+        vertice.add_all_intersections(list[1:])
 
-        print(tvertice)
+        print(vertice)
         
-        return
+        return list[0]
 
 
     def run(self):
@@ -342,14 +330,13 @@ class MyRob(CRobLinkAngs):
 
             self.driveMotors(lPow,rPow)
             
-            if x%2 >= 1.8 and y%2 >= 1.8:
-                self.driveMotors(0.02,0.02)
+            if x%2 >= 1.7 and y%2 >= 1.7:
+                self.driveMotors(0.04,0.04)
 
-            if (x%2 <= 0.1) and (y%2 <= 0.1):
+            elif (x%2 <= 0.1) and (y%2 <= 0.1):
                 ori = self.get_orientation_def(sensor)
-                self.driveMotors(0.02,0.02)
-                self.check_intersection_type(buffer, ori, round(x), round(y))
-
+                self.driveMotors(0.01,0.01)
+                current_orientation = self.check_intersection_type(buffer, ori, round(x), round(y), current_orientation)
                 """ if str([x, y]) not in self.dict:
                     current_orientation = self.get_orientation_def(180-ori) 
                 else:
@@ -361,7 +348,7 @@ class MyRob(CRobLinkAngs):
 
             if line == ZEROS:
                 print(buffer)
-                #self.driveMotors(0.0,0.0)
+                self.driveMotors(0.0,0.0)
                 continue
             
             #aqui vemos ja passamos por certos locais
@@ -374,6 +361,8 @@ class MyRob(CRobLinkAngs):
                     self.put_in_map(round(x), round(y), orientation)
                     self.print_map_to_file()
 
+            
+
 class Intersection():
     def __init__(self, x, y):
         self.x = x
@@ -382,16 +371,16 @@ class Intersection():
         self.visited = False
         
         """
-            0 - north / up
-            1 - west  / right
-            2 - south / down
-            3 - east  / left
-
+            0 - east  / left
+            1 - north / up
+            2 - west  / right
+            3 - south / down
+            
             values corresponds to degress
             "v" - visited
             "" - theres no intersection            
         """
-        self.intersections = ["","","",""]
+        self.intersections = []
 
     def __repr__(self) -> str:
         return  "{x: " + str(self.x) + "; " +\
@@ -403,7 +392,7 @@ class Intersection():
     def is_visited(self):
         return self.visited
 
-    def add_intersection(self, index, value):
+    def change_intersection(self, index, value):
         self.intersections[index] = value
 
     def add_all_intersections(self, list):
