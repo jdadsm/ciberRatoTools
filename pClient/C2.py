@@ -23,7 +23,9 @@ class MyRob(CRobLinkAngs):
 
         self.max_u = 10
 
-        self.vertices = {}
+        self.vertices = []
+
+        #self.dict = {}
 
     # In this map the center of cell (i,j), (i in 0..6, j in 0..13) is mapped to labMap[i*2][j*2].
     # to know if there is a wall on top of cell(i,j) (i in 0..5), check if the value of labMap[i*2+1][j*2] is space or not
@@ -132,7 +134,6 @@ class MyRob(CRobLinkAngs):
         if u < -self.max_u:
             u = -self.max_u
             
-        #print("u:",u)
         return u
     
     def getLinePos(self,line):
@@ -190,14 +191,12 @@ class MyRob(CRobLinkAngs):
         if buffer[0] == ['0', '1']:
             if buffer[1] == ['1', '1']:
                 if right:
-                    print("here")
                     return -45
                 else:
                     return 135
 
             if buffer[1] == buffer[0]:
-                self.check_buffer_orientation(buffer[1:], right)
-                pass
+                return self.check_buffer_orientation(buffer[1:], right)
 
         elif buffer[0] == ['1', '0']:
             if buffer[1] == ['1', '1']:
@@ -220,50 +219,72 @@ class MyRob(CRobLinkAngs):
                     return 45 
 
             if buffer[1] == buffer[0]:
-                self.check_buffer_orientation(buffer[1:], right)
+                return self.check_buffer_orientation(buffer[1:], right)
             pass
 
         return None
 
-    def check_intersection_type(self, buffer, ori, x, y):
+    def put_intersection(self, x, y, value):
 
-        if str([x, y]) in self.vertices.keys():
-            return
+        print("value: " + str(value))
+        print("x: " + str(x))
+        print("y: " + str(y))
 
-        buffert = [line[2:5] for line in buffer].count(['1', '1', '1'])
+        if str([x, y]) not in self.dict: 
+            self.dict[str([x, y])] = [value]
+        elif value not in self.dict[str([x, y])]:
+            self.dict[str([x, y])].append(value)
+
+
+    def check_intersection_type(self, buffertemp, ori, x, y):
+
+        buffer = [line for line in buffertemp if line!=['0', '0', '0', '0', '0', '0', '0']]
+
+        buffert = [line[3] for line in buffer].count('1')
+        
+        print("buffer: " + str(buffer))
+        print("buffert: " + str(buffert))
 
         buffleft = [line[0:2] for line in buffer if line[0:2]!=['0', '0']]
         buffright = [line[5:7] for line in buffer if line[5:7]!=['0', '0']]
 
-        if buffleft == [] and buffright == []:
-            return
+        tvertice = None
 
-        # casos for left side -> fazer nova funcao maybe?
+        if self.vertices != []:
+            for vertice in self.vertices:
+                if vertice.check_xy(x, y):      #there is already a vertice with those coordinates
+                    tvertice = vertice
+
+        #backwards
+        list = []
+
+        if buffert == len(buffer):      #segue em frente
+            list.append(ori)
+            #self.put_intersection(x, y, ori)              
+
         if len(buffleft) > 1:
-            left_int = self.check_buffer_orientation(buffleft, False)
-            true_int1 = self.get_orientation_def(left_int+ori)
-            print("left int: " + str(left_int))
-            print("left real: " + str(true_int1))
+            true_int1 = self.get_orientation_def(self.check_buffer_orientation(buffleft, False)+ori)
+            list.append(true_int1)
+            #self.put_intersection(x, y, true_int1)  
+
         if len(buffright) > 1:
-            right_int = self.check_buffer_orientation(buffright, True)
-            true_int2 = self.get_orientation_def(right_int+ori)
-            print("right int: " + str(right_int))
-            print("right real: " + str(true_int2))
-        
+            true_int2 = self.get_orientation_def(self.check_buffer_orientation(buffright, True)+ori)
+            list.append(true_int2)
+            #self.put_intersection(x, y, true_int2)  
 
 
-        #print("buffer left: " + str(buffleft))
-        #print("buffer right: " + str(buffright))
-#
-        #print("len r: " + str(len(buffright)))
-        #print("len l: " + str(len(buffleft)))
-
-        if buffert == 5:
-            print("path forward, ori is " + str(ori))
+        if tvertice == None:
+            tvertice = Intersection(x, y)
+            self.vertices.append(tvertice)
         else:
-            print("must turn")
-        #print(buffert)
-        pass
+            self.vertices.remove(tvertice)
+            tvertice.add_all_intersections(list)
+            pass
+
+        print(tvertice)
+        
+        return
+
 
     def run(self):
 
@@ -307,7 +328,7 @@ class MyRob(CRobLinkAngs):
             #print("x: " + str(x) + ", y: " + str(y))
             orientation = self.check_direction(sensor)
             
-            posOverLine = self.getLinePos(line)
+            #posOverLine = self.getLinePos(line)
             
             #print("posOverLine:",posOverLine)
             
@@ -315,29 +336,35 @@ class MyRob(CRobLinkAngs):
             buffer = [line] + buffer
             
             #ajustar PID ajuda a ficar mais direito -> melhor amostras
-            lPow = velSetPoint - self.PID(0,sensor/180)
-            rPow = velSetPoint + self.PID(0,sensor/180)
+            lPow = velSetPoint - self.PID(current_orientation/180,sensor/180)
+            rPow = velSetPoint + self.PID(current_orientation/180,sensor/180)
             
-            #print("lpow: " + str(lPow))
-            #print("rpow: " + str(rPow))
 
             self.driveMotors(lPow,rPow)
             
-            #print("orientation:",orientation)
-            #print("x " + str(x))
-            #print("y " + str(y))
+            if x%2 >= 1.8 and y%2 >= 1.8:
+                self.driveMotors(0.02,0.02)
+
+            if (x%2 <= 0.1) and (y%2 <= 0.1):
+                ori = self.get_orientation_def(sensor)
+                self.driveMotors(0.02,0.02)
+                self.check_intersection_type(buffer, ori, round(x), round(y))
+
+                """ if str([x, y]) not in self.dict:
+                    current_orientation = self.get_orientation_def(180-ori) 
+                else:
+                    if self.dict(str([x, y])) != None and self.dict(str([x, y])) != []:
+                        current_orientation = self.dict(str([x, y]))[0]
+                        self.dict(str([x, y])).remove(current_orientation)
+                print(str(self.dict)) """
             
-            if (x%2 >= 1.8 or x%2 <= 0.1) and (y%2 >= 1.8 or y%2 <= 0.1):
-                print("buffer " +  str(buffer))
-                print("h")
-                self.driveMotors(0.04,0.04)
-                self.check_intersection_type(buffer, sensor, round(x), round(y))
-                
+
             if line == ZEROS:
                 print(buffer)
-                self.driveMotors(0.0,0.0)
+                #self.driveMotors(0.0,0.0)
                 continue
             
+            #aqui vemos ja passamos por certos locais
             if (orientation != "-" and orientation != "|"):
                 if(round(x)%2 == 1 and round(y)%2 == 1):
                     self.put_in_map(round(x), round(y), orientation)
@@ -346,6 +373,48 @@ class MyRob(CRobLinkAngs):
                 if (round(x)%2 == 1 or round(y)%2 == 1):
                     self.put_in_map(round(x), round(y), orientation)
                     self.print_map_to_file()
+
+class Intersection():
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+        self.visited = False
+        
+        """
+            0 - north / up
+            1 - west  / right
+            2 - south / down
+            3 - east  / left
+
+            values corresponds to degress
+            "v" - visited
+            "" - theres no intersection            
+        """
+        self.intersections = ["","","",""]
+
+    def __repr__(self) -> str:
+        return  "{x: " + str(self.x) + "; " +\
+                "y: " + str(self.y) + "; " +\
+                "visited?: " + str(self.visited) + "; " +\
+                "intersections: " + str(self.intersections) + "}"
+
+
+    def is_visited(self):
+        return self.visited
+
+    def add_intersection(self, index, value):
+        self.intersections[index] = value
+
+    def add_all_intersections(self, list):
+        self.intersections = list
+
+    def check_xy(self, x, y):
+        if self.x == x and self.y == y:
+            return self
+        else:
+            return None
+
 
 
 class Map():
