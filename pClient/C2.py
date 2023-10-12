@@ -21,6 +21,10 @@ class MyRob(CRobLinkAngs):
         self.e_m2 = 0
         self.u_m1 = 0
 
+        self.e_m_1 = 0
+        self.e_m_2 = 0
+        self.u_m_1 = 0
+
         self.max_u = 10
 
         self.vertices = []
@@ -114,7 +118,7 @@ class MyRob(CRobLinkAngs):
 
         self.map[10][24] = "I"
     
-    def PID(self,r,y):
+    def PID_line(self,r,y):
         u = 0
         
         K0 = self.Kp*(1+self.h/self.Ti+self.Td/self.h)
@@ -135,18 +139,40 @@ class MyRob(CRobLinkAngs):
             u = -self.max_u
             
         return u
+
+    def PID_gps(self,r,y):
+        u = 0
+        
+        K0 = self.Kp*(1+self.h/self.Ti+self.Td/self.h)
+        K1 = -self.Kp*(1+2*self.Td/self.h)
+        K2 = self.Kp*self.Td/self.h
+        
+        e = r-y
+        
+        u = self.u_m_1 + K0*e + K1*self.e_m_1 + K2*self.e_m_2
+            
+        self.e_m_2 = self.e_m_1
+        self.e_m_1 = e
+        self.u_m_1 = u
+        
+        if u > self.max_u:
+            u = self.max_u
+        if u < -self.max_u:
+            u = -self.max_u
+            
+        return u
     
     def getLinePos(self,line):
         posOverLine = 0
         nActiveSensors = 0
         
-        for i in range(7):
+        for i in range(3):
             if line[i] == "1":
-                posOverLine += i-3
+                posOverLine += i-1
                 nActiveSensors+=1
         
         if nActiveSensors != 0:
-            posOverLine = 0.08*posOverLine/nActiveSensors
+            posOverLine = 0.02*posOverLine/nActiveSensors
         else:
             return None
         
@@ -222,8 +248,9 @@ class MyRob(CRobLinkAngs):
                 return self.check_buffer_orientation(buffer[1:], right)
             pass
 
-        return ""
+        print("uh...")
 
+        return ""
 
     def check_intersection_type(self, buffertemp, ori, x, y, current):
 
@@ -264,9 +291,6 @@ class MyRob(CRobLinkAngs):
             list.append(true_int2)  
 
         # by now, the list should be filled with all intersections in a given point 
-        # the first of those intersections to have 0, 90, 180, -90 should be considered "anchors" and the up, down, left and right positions should depend on them 
-
-        list.sort()
         vertice.add_all_intersections(list[1:])
 
         print(vertice)
@@ -294,7 +318,7 @@ class MyRob(CRobLinkAngs):
         for i in range(BUFFER_SIZE):
             buffer.append(BUFFER_DEFAULT)
             
-        velSetPoint = 0.15
+        velSetPoint = 0.10
 
         #this should always be 0 at the beginning
         sensor = self.measures.compass
@@ -314,28 +338,38 @@ class MyRob(CRobLinkAngs):
 
             #print(str(self.check_direction(sensor)))
             #print("x: " + str(x) + ", y: " + str(y))
+
+            #ajustar o robo nas linhas
             orientation = self.check_direction(sensor)
-            
-            #posOverLine = self.getLinePos(line)
+
+            posOverLine = self.getLinePos(line[2:5])
+
+            if posOverLine == None:
+                val = 0
+                for l in buffer:
+                    val+=self.calculate_ones(l)
+                #print("val:",val)
+                #print("buffer:",buffer)
+                if val > 0:
+                    self.driveMotors(-0.15,0.15)
+                else:
+                    self.driveMotors(0.15,-0.15)
+                continue
             
             #print("posOverLine:",posOverLine)
             
             buffer = buffer[0:BUFFER_SIZE]
             buffer = [line] + buffer
-            
-            #ajustar PID ajuda a ficar mais direito -> melhor amostras
-            lPow = velSetPoint - self.PID(current_orientation/180,sensor/180)
-            rPow = velSetPoint + self.PID(current_orientation/180,sensor/180)
-            
 
-            self.driveMotors(lPow,rPow)
+            print(posOverLine)
+            
             
             if x%2 >= 1.7 and y%2 >= 1.7:
                 self.driveMotors(0.04,0.04)
 
             elif (x%2 <= 0.1) and (y%2 <= 0.1):
                 ori = self.get_orientation_def(sensor)
-                self.driveMotors(0.01,0.01)
+                self.driveMotors(0.02,0.02)
                 current_orientation = self.check_intersection_type(buffer, ori, round(x), round(y), current_orientation)
                 """ if str([x, y]) not in self.dict:
                     current_orientation = self.get_orientation_def(180-ori) 
@@ -344,12 +378,17 @@ class MyRob(CRobLinkAngs):
                         current_orientation = self.dict(str([x, y]))[0]
                         self.dict(str([x, y])).remove(current_orientation)
                 print(str(self.dict)) """
-            
 
-            if line == ZEROS:
-                print(buffer)
-                self.driveMotors(0.0,0.0)
-                continue
+            #ajustar PID ajuda a ficar mais direito -> melhor amostras
+            lPow = velSetPoint - (self.PID_line(0,(current_orientation - sensor)/720)/2 + self.PID_gps(0,posOverLine)/2)
+            rPow = velSetPoint + (self.PID_line(0,(current_orientation - sensor)/720)/2 + self.PID_gps(0,posOverLine)/2)            
+
+            print("lpow: " + str(lPow))
+            print("rpow: " + str(rPow))
+
+            self.driveMotors(lPow,rPow)
+
+            print("current orientation: " + str(current_orientation))
             
             #aqui vemos ja passamos por certos locais
             if (orientation != "-" and orientation != "|"):
