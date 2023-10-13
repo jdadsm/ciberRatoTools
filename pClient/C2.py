@@ -2,7 +2,7 @@
 from asyncio import sleep
 import sys
 from croblink import *
-from math import *
+import math
 import xml.etree.ElementTree as ET
 
 CELLROWS=7
@@ -166,13 +166,13 @@ class MyRob(CRobLinkAngs):
         posOverLine = 0
         nActiveSensors = 0
         
-        for i in range(3):
+        for i in range(7):
             if line[i] == "1":
-                posOverLine += i-1
+                posOverLine += i-3
                 nActiveSensors+=1
         
         if nActiveSensors != 0:
-            posOverLine = 0.02*posOverLine/nActiveSensors
+            posOverLine = 0.08*posOverLine/nActiveSensors
         else:
             return None
         
@@ -212,6 +212,9 @@ class MyRob(CRobLinkAngs):
                 return -90
             else:
                 return 90
+            
+        if len(buffer) < 2:
+            return None
 
         # intersecoes diagonais
         if buffer[0] == ['0', '1']:
@@ -251,6 +254,26 @@ class MyRob(CRobLinkAngs):
         print("uh...")
 
         return ""
+    
+    def calculate_goal(self, orientation, x, y):
+        if orientation == 0:
+            return [x+2, y]
+        if orientation == 45:
+            return [x+2, y+2]
+        if orientation == 90:
+            return [x, y+2]
+        if orientation == 135:
+            return [x-2, y+2]
+        if orientation == -180:
+            return [x-2, y]
+        if orientation == -45:
+            return [x+2, y-2]
+        if orientation == -90:
+            return [x, y-2]
+        if orientation == -135:
+            return [x-2, y-2]
+        
+        return None
 
     def check_intersection_type(self, buffertemp, ori, x, y, current):
 
@@ -283,12 +306,16 @@ class MyRob(CRobLinkAngs):
             list.append(ori)
 
         if len(buffleft) > 1:
-            true_int1 = self.get_orientation_def(self.check_buffer_orientation(buffleft, False)+ori)
-            list.append(true_int1)
+            var = self.check_buffer_orientation(buffleft, False)
+            if  var != None:
+                true_int1 = self.get_orientation_def(int(var)+ori)
+                list.append(true_int1)
 
         if len(buffright) > 1:
-            true_int2 = self.get_orientation_def(self.check_buffer_orientation(buffright, True)+ori)
-            list.append(true_int2)  
+            var = self.check_buffer_orientation(buffright, True)
+            if  var != None:
+                true_int2 = self.get_orientation_def(int(var)+ori)
+                list.append(true_int2)
 
         # by now, the list should be filled with all intersections in a given point 
         vertice.add_all_intersections(list[1:])
@@ -323,7 +350,10 @@ class MyRob(CRobLinkAngs):
         #this should always be 0 at the beginning
         sensor = self.measures.compass
         current_orientation = self.get_orientation_def(sensor)
-        print(current_orientation)
+        #print(current_orientation)
+
+        goal = self.calculate_goal(current_orientation, 0, 0)
+        print(goal)
             
         while True:
             self.readSensors()
@@ -342,8 +372,9 @@ class MyRob(CRobLinkAngs):
             #ajustar o robo nas linhas
             orientation = self.check_direction(sensor)
 
-            posOverLine = self.getLinePos(line[2:5])
+            posOverLine = self.getLinePos(line)
 
+            """
             if posOverLine == None:
                 val = 0
                 for l in buffer:
@@ -355,40 +386,42 @@ class MyRob(CRobLinkAngs):
                 else:
                     self.driveMotors(0.15,-0.15)
                 continue
+            """
             
             #print("posOverLine:",posOverLine)
             
             buffer = buffer[0:BUFFER_SIZE]
             buffer = [line] + buffer
 
-            print(posOverLine)
+            #print(posOverLine)
             
             
-            if x%2 >= 1.7 and y%2 >= 1.7:
-                self.driveMotors(0.04,0.04)
-
-            elif (x%2 <= 0.1) and (y%2 <= 0.1):
-                ori = self.get_orientation_def(sensor)
-                self.driveMotors(0.02,0.02)
-                current_orientation = self.check_intersection_type(buffer, ori, round(x), round(y), current_orientation)
-                """ if str([x, y]) not in self.dict:
-                    current_orientation = self.get_orientation_def(180-ori) 
-                else:
-                    if self.dict(str([x, y])) != None and self.dict(str([x, y])) != []:
-                        current_orientation = self.dict(str([x, y]))[0]
-                        self.dict(str([x, y])).remove(current_orientation)
-                print(str(self.dict)) """
-
+            if abs(x-goal[0]) <= 0.1 and abs(y-goal[1]) <= 0.1:
+                current_orientation = self.check_intersection_type(buffer, self.get_orientation_def(sensor), round(x), round(y), current_orientation)
+                goal = self.calculate_goal(current_orientation,goal[0],goal[1]) 
+            print("Goal:",goal)
+            goal = [2.0,2.0]
+                
+            alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
+            
+            expr = (1)*(sensor - alpha)
+            print("Alpha:",alpha)
+            print("Diff:",expr)
+            
             #ajustar PID ajuda a ficar mais direito -> melhor amostras
-            lPow = velSetPoint - (self.PID_line(0,(current_orientation - sensor)/720)/2 + self.PID_gps(0,posOverLine)/2)
-            rPow = velSetPoint + (self.PID_line(0,(current_orientation - sensor)/720)/2 + self.PID_gps(0,posOverLine)/2)            
+            u = self.PID_line(0,expr)
+            u = max(min(u,0.15),-0.15)
+            print("U:",u)
+            lPow = velSetPoint - u
+            rPow = velSetPoint + u          
 
-            print("lpow: " + str(lPow))
-            print("rpow: " + str(rPow))
+            #print("lpow: " + str(lPow))
+            #print("rpow: " + str(rPow))
 
+            rPow = max(min(rPow,0.15),-0.15)
             self.driveMotors(lPow,rPow)
 
-            print("current orientation: " + str(current_orientation))
+            #print("current orientation: " + str(current_orientation))
             
             #aqui vemos ja passamos por certos locais
             if (orientation != "-" and orientation != "|"):
