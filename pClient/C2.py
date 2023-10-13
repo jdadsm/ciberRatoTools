@@ -21,18 +21,35 @@ class MyRob(CRobLinkAngs):
         self.e_m2 = 0
         self.u_m1 = 0
 
-        self.e_m_1 = 0
-        self.e_m_2 = 0
-        self.u_m_1 = 0
-
         self.max_u = 10
 
         self.vertices = []
 
-        #self.dict = {}
-
     # In this map the center of cell (i,j), (i in 0..6, j in 0..13) is mapped to labMap[i*2][j*2].
     # to know if there is a wall on top of cell(i,j) (i in 0..5), check if the value of labMap[i*2+1][j*2] is space or not
+    
+    def PID(self,r,y):
+        u = 0
+        
+        K0 = self.Kp*(1+self.h/self.Ti+self.Td/self.h)
+        K1 = -self.Kp*(1+2*self.Td/self.h)
+        K2 = self.Kp*self.Td/self.h
+        
+        e = r-y
+        
+        u = self.u_m1 + K0*e + K1*self.e_m1 + K2*self.e_m2
+            
+        self.e_m2 = self.e_m1
+        self.e_m1 = e
+        self.u_m1 = u
+        
+        if u > self.max_u:
+            u = self.max_u
+        if u < -self.max_u:
+            u = -self.max_u
+            
+        return u
+
     def setMap(self, labMap):
         self.labMap = labMap
 
@@ -117,50 +134,6 @@ class MyRob(CRobLinkAngs):
         self.map = [[0 for x in range(columns)] for y in range(lines)] #melhor fazer com variavel global...
 
         self.map[10][24] = "I"
-    
-    def PID_line(self,r,y):
-        u = 0
-        
-        K0 = self.Kp*(1+self.h/self.Ti+self.Td/self.h)
-        K1 = -self.Kp*(1+2*self.Td/self.h)
-        K2 = self.Kp*self.Td/self.h
-        
-        e = r-y
-        
-        u = self.u_m1 + K0*e + K1*self.e_m1 + K2*self.e_m2
-            
-        self.e_m2 = self.e_m1
-        self.e_m1 = e
-        self.u_m1 = u
-        
-        if u > self.max_u:
-            u = self.max_u
-        if u < -self.max_u:
-            u = -self.max_u
-            
-        return u
-
-    def PID_gps(self,r,y):
-        u = 0
-        
-        K0 = self.Kp*(1+self.h/self.Ti+self.Td/self.h)
-        K1 = -self.Kp*(1+2*self.Td/self.h)
-        K2 = self.Kp*self.Td/self.h
-        
-        e = r-y
-        
-        u = self.u_m_1 + K0*e + K1*self.e_m_1 + K2*self.e_m_2
-            
-        self.e_m_2 = self.e_m_1
-        self.e_m_1 = e
-        self.u_m_1 = u
-        
-        if u > self.max_u:
-            u = self.max_u
-        if u < -self.max_u:
-            u = -self.max_u
-            
-        return u
     
     def getLinePos(self,line):
         posOverLine = 0
@@ -251,9 +224,7 @@ class MyRob(CRobLinkAngs):
                 return self.check_buffer_orientation(buffer[1:], right)
             pass
 
-        print("uh...")
-
-        return ""
+        return None
     
     def calculate_goal(self, orientation, x, y):
         if orientation == 0:
@@ -272,9 +243,9 @@ class MyRob(CRobLinkAngs):
             return [x, y-2]
         if orientation == -135:
             return [x-2, y-2]
-        
         return None
 
+    #this will return the current orientation
     def check_intersection_type(self, buffertemp, ori, x, y, current):
 
         buffer = [line for line in buffertemp if line!=['0', '0', '0', '0', '0', '0', '0']]
@@ -317,14 +288,19 @@ class MyRob(CRobLinkAngs):
                 true_int2 = self.get_orientation_def(int(var)+ori)
                 list.append(true_int2)
 
+        if len(list) == 1:
+            return list[0]
+        
+        elif list == []:
+            print("dead end")
+            return self.get_orientation_def(180-ori) #go backwards
+
+
         # by now, the list should be filled with all intersections in a given point 
         vertice.add_all_intersections(list[1:])
-
-        print(vertice)
         
         return list[0]
-
-
+        
     def run(self):
 
         if self.status != 0:
@@ -372,7 +348,7 @@ class MyRob(CRobLinkAngs):
             #ajustar o robo nas linhas
             orientation = self.check_direction(sensor)
 
-            posOverLine = self.getLinePos(line)
+            #posOverLine = self.getLinePos(line)
 
             """
             if posOverLine == None:
@@ -389,37 +365,37 @@ class MyRob(CRobLinkAngs):
             """
             
             #print("posOverLine:",posOverLine)
-            
-            buffer = buffer[0:BUFFER_SIZE]
-            buffer = [line] + buffer
 
             #print(posOverLine)
             
-            
             if abs(x-goal[0]) <= 0.1 and abs(y-goal[1]) <= 0.1:
+                print("orientation", self.get_orientation_def(sensor))
                 current_orientation = self.check_intersection_type(buffer, self.get_orientation_def(sensor), round(x), round(y), current_orientation)
                 goal = self.calculate_goal(current_orientation,goal[0],goal[1]) 
-            print("Goal:",goal)
-            goal = [2.0,2.0]
                 
+            print("goal", goal)
             alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
             
-            expr = (1)*(sensor - alpha)
-            print("Alpha:",alpha)
-            print("Diff:",expr)
+            
+            #print("current orientation", current_orientation)
+            expr = (sensor - alpha)
+            print(expr)
+            #print("Alpha:",alpha)
+            #print("Diff:",expr)
             
             #ajustar PID ajuda a ficar mais direito -> melhor amostras
-            u = self.PID_line(0,expr)
-            u = max(min(u,0.15),-0.15)
-            print("U:",u)
+            u = self.PID(0,expr*0.02)*0.5
+            print("u", u)
             lPow = velSetPoint - u
             rPow = velSetPoint + u          
 
-            #print("lpow: " + str(lPow))
-            #print("rpow: " + str(rPow))
+            print("lpow: " + str(lPow))
+            print("rpow: " + str(rPow))
 
-            rPow = max(min(rPow,0.15),-0.15)
             self.driveMotors(lPow,rPow)
+
+            buffer = buffer[0:BUFFER_SIZE]
+            buffer = [line] + buffer
 
             #print("current orientation: " + str(current_orientation))
             
