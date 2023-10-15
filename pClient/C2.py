@@ -95,26 +95,26 @@ class MyRob(CRobLinkAngs):
         file.close()
         pass
 
-    """this function takes an orientation value and converts it to a orientation:
+    """this function takes a sensor value and converts it to a string representation of an orientation:
         - -> horizontal line                    -
         | -> vertical line                      | 
         / -> oblique line (tan is positive)     /
         \ -> oblique line (tan is negative)     \
         0 -> empty (should not be returned under any circunstance)
     """
-    def check_direction(self, ori):
+    def get_orientation_string(self, sensor):
 
-        if ori < -180 or ori > 180:
+        if sensor < -180 or sensor > 180:
             print("out of bounds")
             return 0
 
-        if (ori <= 22.5 and ori >= -22.5) or (ori >= 157.5 and ori <= 180) or (ori>=180 or ori<=-157.5):
+        if (sensor <= 22.5 and sensor >= -22.5) or (sensor >= 157.5 and sensor <= 180) or (sensor>=180 or sensor<=-157.5):
             return '-'
-        elif (ori <= -67.5 and ori >= -112.5) or (ori >= 67.5 and ori <= 112.5):
+        elif (sensor <= -67.5 and sensor >= -112.5) or (sensor >= 67.5 and sensor <= 112.5):
             return '|'
-        elif (ori < -112.5 and ori > -157.5) or (ori > 22.5 and ori < 67.5):
+        elif (sensor < -112.5 and sensor > -157.5) or (sensor > 22.5 and sensor < 67.5):
             return '/'
-        elif (ori < -22.5 and ori > -67.5) or (ori > 112.5 and ori < 157.5):
+        elif (sensor < -22.5 and sensor > -67.5) or (sensor > 112.5 and sensor < 157.5):
             return chr(92) # \ character
         else:
             print("Orientation interval was not found...")
@@ -151,32 +151,35 @@ class MyRob(CRobLinkAngs):
         
         return posOverLine
     
-    def get_orientation_def(self, ori):
+    
+    """
+    this function takes a sensor value and returns the closest sensor value from the possible directions in the map 
+    """    
+    def get_exact_sensor_value(self, sensor):
 
-        if ori < -180:
-            return self.get_orientation_def(ori+360)
-        elif ori>180:
-            return self.get_orientation_def(ori-360)
+        if sensor < -180:
+            return self.get_exact_sensor_value(sensor+360)
+        elif sensor > 180:
+            return self.get_exact_sensor_value(sensor-360)
         
-        if (ori <= 22.5 and ori>=0) or (ori<=0 and ori>=-22.5):
+        if (sensor <= 22.5 and sensor >= 0) or (sensor <= 0 and sensor >= -22.5):
             return 0
-        elif (ori >= 22.5 and ori <= 67.5):
+        elif (sensor >= 22.5 and sensor <= 67.5):
             return 45
-        elif (ori >= 67.5 and ori <= 112.5):
+        elif (sensor >= 67.5 and sensor <= 112.5):
             return 90
-        elif (ori >= 112.5 and ori <= 157.5):
+        elif (sensor >= 112.5 and sensor <= 157.5):
             return 135
-        elif (ori>=157.5 and ori<= 180) or (ori<=-157.5 and ori>=-180):
+        elif (sensor >= 157.5 and sensor <= 180) or (sensor <= -157.5 and sensor >= -180):
             return 180
-        elif (ori>=-157.5 and ori<=-112.5):
+        elif (sensor >= -157.5 and sensor <=-112.5):
             return -135
-        elif (ori>=-112.5 and ori<=-67.5):
+        elif (sensor >= -112.5 and sensor <= -67.5):
             return -90
-        elif (ori>=-67.5 and ori<=-22.5):
+        elif (sensor >= -67.5 and sensor <= -22.5):
             return -45
         else:
-            print("Orientation interval was not found...")
-            return 0
+            return None
 
     def check_buffer_orientation(self, buffer, right):
         # intersecoes retas
@@ -226,27 +229,29 @@ class MyRob(CRobLinkAngs):
 
         return None
     
-    def calculate_goal(self, orientation, x, y):
-        if orientation == 0:
+    """This function takes the position of the robot the sensor value of the line where he is at the moment and return the position to have as a next goal
+    """
+    def get_next_goal(self, sensor, x, y):
+        if sensor == 0:
             return [x+2, y]
-        if orientation == 45:
+        if sensor == 45:
             return [x+2, y+2]
-        if orientation == 90:
+        if sensor == 90:
             return [x, y+2]
-        if orientation == 135:
+        if sensor == 135:
             return [x-2, y+2]
-        if orientation == -180:
+        if sensor == -180:
             return [x-2, y]
-        if orientation == -45:
+        if sensor == -45:
             return [x+2, y-2]
-        if orientation == -90:
+        if sensor == -90:
             return [x, y-2]
-        if orientation == -135:
+        if sensor == -135:
             return [x-2, y-2]
         return None
 
     #this will return the current orientation
-    def check_intersection_type(self, buffertemp, ori, x, y, current):
+    def get_intersection_type(self, buffertemp, ori, x, y, current):
 
         buffer = [line for line in buffertemp if line!=['0', '0', '0', '0', '0', '0', '0']]
 
@@ -279,13 +284,13 @@ class MyRob(CRobLinkAngs):
         if len(buffleft) > 1:
             var = self.check_buffer_orientation(buffleft, False)
             if  var != None:
-                true_int1 = self.get_orientation_def(int(var)+ori)
+                true_int1 = self.get_exact_sensor_value(int(var)+ori)
                 list.append(true_int1)
 
         if len(buffright) > 1:
             var = self.check_buffer_orientation(buffright, True)
             if  var != None:
-                true_int2 = self.get_orientation_def(int(var)+ori)
+                true_int2 = self.get_exact_sensor_value(int(var)+ori)
                 list.append(true_int2)
 
         if len(list) == 1:
@@ -293,7 +298,7 @@ class MyRob(CRobLinkAngs):
         
         elif list == []:
             print("dead end")
-            return self.get_orientation_def(180-ori) #go backwards
+            return self.get_exact_sensor_value(180-ori) #go backwards
 
 
         # by now, the list should be filled with all intersections in a given point 
@@ -325,29 +330,29 @@ class MyRob(CRobLinkAngs):
 
         #this should always be 0 at the beginning
         sensor = self.measures.compass
-        current_orientation = self.get_orientation_def(sensor)
-        #print(current_orientation)
+        exact_sensor = self.get_exact_sensor_value(sensor)
+        #print(exact_sensor)
 
-        goal = self.calculate_goal(current_orientation, 0, 0)
+        goal = self.get_next_goal(exact_sensor, 0, 0)
         print(goal)
             
         while True:
             self.readSensors()
             
             line = self.measures.lineSensor
-            sensor = self.measures.compass #compasso - em graus 
-            #print("Orientation:",sensor)
+            sensor = self.measures.compass #compass - em graus 
+            #print("Sensor:",sensor)
 
             """cada quadrado tem 2 unidades de medida -> verificar qual a orientacao no meio de cada quadrado"""
             x = self.measures.x - pos_inicial_real[0]
             y = self.measures.y - pos_inicial_real[1]
 
-            #print(str(self.check_direction(sensor)))
-            #print("x: " + str(x) + ", y: " + str(y))
+            
 
             #ajustar o robo nas linhas
-            orientation = self.check_direction(sensor)
-
+            orientation_string = self.get_orientation_string(sensor)
+            print("orientation:",orientation_string)
+            
             #posOverLine = self.getLinePos(line)
 
             """
@@ -369,15 +374,15 @@ class MyRob(CRobLinkAngs):
             #print(posOverLine)
             
             if abs(x-goal[0]) <= 0.1 and abs(y-goal[1]) <= 0.1:
-                print("orientation", self.get_orientation_def(sensor))
-                current_orientation = self.check_intersection_type(buffer, self.get_orientation_def(sensor), round(x), round(y), current_orientation)
-                goal = self.calculate_goal(current_orientation,goal[0],goal[1]) 
+                print("Exact sensor value:", self.get_exact_sensor_value(sensor))
+                exact_sensor = self.get_intersection_type(buffer, self.get_exact_sensor_value(sensor), round(x), round(y), exact_sensor)
+                goal = self.get_next_goal(exact_sensor,goal[0],goal[1]) 
                 
             print("goal", goal)
             alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
             
             
-            #print("current orientation", current_orientation)
+            #print("current orientation", exact_sensor)
             expr = (sensor - alpha)
             print(expr)
             #print("Alpha:",alpha)
@@ -397,16 +402,16 @@ class MyRob(CRobLinkAngs):
             buffer = buffer[0:BUFFER_SIZE]
             buffer = [line] + buffer
 
-            #print("current orientation: " + str(current_orientation))
+            #print("current orientation: " + str(exact_sensor))
             
             #aqui vemos ja passamos por certos locais
-            if (orientation != "-" and orientation != "|"):
+            if (orientation_string != "-" and orientation_string != "|"):
                 if(round(x)%2 == 1 and round(y)%2 == 1):
-                    self.put_in_map(round(x), round(y), orientation)
+                    self.put_in_map(round(x), round(y), orientation_string)
                     self.print_map_to_file()
             else:
                 if (round(x)%2 == 1 or round(y)%2 == 1):
-                    self.put_in_map(round(x), round(y), orientation)
+                    self.put_in_map(round(x), round(y), orientation_string)
                     self.print_map_to_file()
 
             
