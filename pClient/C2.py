@@ -11,7 +11,7 @@ CELLCOLS=14
 class MyRob(CRobLinkAngs):
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
-        self.h = 0.050
+        self.h = 0.0085
 
         self.Kp = 1
         self.Ti = 1/self.h
@@ -21,7 +21,7 @@ class MyRob(CRobLinkAngs):
         self.e_m2 = 0
         self.u_m1 = 0
 
-        self.max_u = 10
+        self.max_u = 5
 
         self.vertices = []
 
@@ -189,7 +189,14 @@ class MyRob(CRobLinkAngs):
             else:
                 return 90
             
-        if len(buffer) < 2:
+        print(len(buffer))
+        print("")
+        if len(buffer) == 1:
+            if buffer[0] == ['1','1']:
+                if right:
+                    return -90
+                else:
+                    return 90
             return None
 
         # intersecoes diagonais
@@ -209,6 +216,8 @@ class MyRob(CRobLinkAngs):
                     return -135
                 else:
                     return 45
+            if buffer[1] == buffer[0]:
+                return self.check_buffer_orientation(buffer[1:], right)
         
         elif buffer[0] == ['1', '1']: 
             if buffer[1] == ['1', '0']:
@@ -240,7 +249,7 @@ class MyRob(CRobLinkAngs):
             return [x, y+2]
         if sensor == 135:
             return [x-2, y+2]
-        if sensor == -180:
+        if sensor == -180 or sensor == 180:
             return [x-2, y]
         if sensor == -45:
             return [x+2, y-2]
@@ -252,13 +261,17 @@ class MyRob(CRobLinkAngs):
 
     #this will return the current orientation
     def get_intersection_type(self, buffertemp, ori, x, y, current):
-
+        
+        print("buffer", buffertemp)
+        
         buffer = [line for line in buffertemp if line!=['0', '0', '0', '0', '0', '0', '0']]
 
         buffert = [line[3] for line in buffer].count('1')
         
-        print("buffer: " + str(buffer))
+        #print("buffer: " + str(buffer))
         print("buffert: " + str(buffert))
+        print("x", x)
+        print("y", y)
 
         buffleft = [line[0:2] for line in buffer if line[0:2]!=['0', '0']]
         buffright = [line[5:7] for line in buffer if line[5:7]!=['0', '0']]
@@ -281,13 +294,16 @@ class MyRob(CRobLinkAngs):
         if buffert == len(buffer):      #segue em frente
             list.append(ori)
 
-        if len(buffleft) > 1:
+        if buffertemp[0][2:5] == ['0', '0', '0'] and (ori in list): #afinal nao ha caminho em frente
+            list.remove(ori)
+
+        if len(buffleft) >= 1:
             var = self.check_buffer_orientation(buffleft, False)
             if  var != None:
                 true_int1 = self.get_exact_sensor_value(int(var)+ori)
                 list.append(true_int1)
 
-        if len(buffright) > 1:
+        if len(buffright) >= 1:
             var = self.check_buffer_orientation(buffright, True)
             if  var != None:
                 true_int2 = self.get_exact_sensor_value(int(var)+ori)
@@ -300,6 +316,7 @@ class MyRob(CRobLinkAngs):
             print("dead end")
             return self.get_exact_sensor_value(180-ori) #go backwards
 
+        print("intersections", list)
 
         # by now, the list should be filled with all intersections in a given point 
         vertice.add_all_intersections(list[1:])
@@ -320,7 +337,7 @@ class MyRob(CRobLinkAngs):
 
         ZEROS = ["0","0","0","0","0","0","0"]
         BUFFER_DEFAULT = ["0","0","1","1","1","0","0"]      
-        BUFFER_SIZE = 4
+        BUFFER_SIZE = 2
         buffer = []
         
         for i in range(BUFFER_SIZE):
@@ -377,6 +394,11 @@ class MyRob(CRobLinkAngs):
                 print("Exact sensor value:", self.get_exact_sensor_value(sensor))
                 exact_sensor = self.get_intersection_type(buffer, self.get_exact_sensor_value(sensor), round(x), round(y), exact_sensor)
                 goal = self.get_next_goal(exact_sensor,goal[0],goal[1]) 
+                continue
+            elif abs(x-goal[0]) <= 0.2 and abs(y-goal[1]) <= 0.2:           #esta se a aproximar, nao vale a pena usar PID que oscila demasiado
+                print("start slowing down")
+                self.driveMotors(0.02, 0.02)
+                continue
                 
             print("goal", goal)
             alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
@@ -390,12 +412,12 @@ class MyRob(CRobLinkAngs):
             
             #ajustar PID ajuda a ficar mais direito -> melhor amostras
             u = self.PID(0,expr*0.02)*0.5
-            print("u", u)
+            #print("u", u)
             lPow = velSetPoint - u
             rPow = velSetPoint + u          
 
-            print("lpow: " + str(lPow))
-            print("rpow: " + str(rPow))
+            #print("lpow: " + str(lPow))
+            #print("rpow: " + str(rPow))
 
             self.driveMotors(lPow,rPow)
 
