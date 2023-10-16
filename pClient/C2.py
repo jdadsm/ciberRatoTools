@@ -23,6 +23,7 @@ class MyRob(CRobLinkAngs):
 
         self.max_u = 5
 
+        #list of intersections
         self.vertices = []
 
         #ultimo goal 
@@ -45,6 +46,8 @@ class MyRob(CRobLinkAngs):
         K2 = self.Kp*self.Td/self.h
         
         e = r-y
+
+        print("em1", self.e_m1)
         
         u = self.u_m1 + K0*e + K1*self.e_m1 + K2*self.e_m2
             
@@ -266,21 +269,39 @@ class MyRob(CRobLinkAngs):
             return [x-2, y-2]
         return None
 
+    def convert_orientation_to_list_index(self, ori):
+        if ori == 0:
+            return 0
+        if ori == 45:
+            return 1
+        if ori == 90:
+            return 2
+        if ori == 135:
+            return 3
+        if ori == 180 or ori == -180:
+            return 4
+        if ori == -135:
+            return 5
+        if ori == -90:
+            return 6
+        if ori == -45:
+            return 7
+
     #this will return the current orientation
     def get_intersection_type(self, buffertemp, ori, x, y, current):
         
-        print("buffer", buffertemp)
+        print("original buffer", buffertemp)
         
         #buffertemp [0:3] e muito a frente do ponto onde a verificacao é feita
-        buffert = [line[3] for line in buffertemp[0:3]].count('1')
+        buffert = [line[3] for line in buffertemp[0:4]].count('1')
         
         #print("buffer: " + str(buffer))
-        print("buffert: " + str(buffert))
         print("x", x)
         print("y", y)
 
         #buffertemp [3:8] e muito a frente do ponto onde a verificacao é feita
-        buffer = [line for line in buffertemp[3:8] if line!=['0', '0', '0', '0', '0', '0', '0']]
+        buffer = [line for line in buffertemp[2:8] if line!=['0', '0', '0', '0', '0', '0', '0']]
+        print("buffer: " + str(buffer))
         buffleft = [line[0:2] for line in buffer if line[0:2]!=['0', '0']]
         buffright = [line[5:7] for line in buffer if line[5:7]!=['0', '0']]
 
@@ -299,7 +320,7 @@ class MyRob(CRobLinkAngs):
         #backwards
         list = []
 
-        if buffert == len(buffertemp[0:3]):      #segue em frente
+        if buffert == len(buffertemp[0:4]):      #segue em frente
             list.append(ori)
 
         if buffertemp[0][2:5] == ['0', '0', '0'] and (ori in list): #afinal nao ha caminho em frente
@@ -396,7 +417,6 @@ class MyRob(CRobLinkAngs):
             #print(posOverLine)
             
             if abs(x-goal[0]) <= 0.1 and abs(y-goal[1]) <= 0.1:
-                print("original buffer:", buffer)
                 buffer_ = buffer[0:8]
                 #print("Exact sensor value:", self.get_exact_sensor_value(sensor))
                 exact_sensor = self.get_intersection_type(buffer_, self.get_exact_sensor_value(sensor), round(x), round(y), exact_sensor)
@@ -413,8 +433,17 @@ class MyRob(CRobLinkAngs):
             else:
                 alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
 
+                if self.get_exact_sensor_value(sensor)==180:    #existe muita disparidade
+                    print("here")
+                    if sensor<0:                                #na parte negativa
+                        expr = (sensor - alpha)
+                        pass
+                    else:                                       #na parte positiva
+                        pass
+
+
                 expr = (sensor - alpha)
-                print(expr)
+                print("expr", expr)
                 
                 u = self.PID(0,expr*0.02)*0.5
 
@@ -423,6 +452,8 @@ class MyRob(CRobLinkAngs):
 
                 self.driveMotors(lPow,rPow)
             
+            #resolver disparacao entre orientacao real ser -180 e variar muito para 180
+
             #estou fora das linhas? É melhor ver como esta a intersecao
 
 
@@ -449,18 +480,39 @@ class Intersection():
         self.y = y
 
         self.visited = False
-        
+
+        self.delete_later = []
+
         """
-            0 - east  / left
-            1 - north / up
-            2 - west  / right
-            3 - south / down
-            
-            values corresponds to degress
-            "v" - visited
-            "" - theres no intersection            
+            list of visited intersections
         """
-        self.intersections = []
+        self.visited_neighbours = []
+
+        """
+            list of to be visited intersections
+        """
+        self.non_visited_neighbours = []
+
+        """
+            0 - west
+            1 - northwest
+            2 - north
+            3 - northeast
+            4 - east
+            5 - southeast
+            6 - south
+            7 - southwest      
+        """
+        self.intersections = {
+            0: False,
+            1: False,
+            2: False,
+            3: False,
+            4: False,
+            5: False,
+            6: False,
+            7: False,
+        }
 
     def __repr__(self) -> str:
         return  "{x: " + str(self.x) + "; " +\
@@ -473,10 +525,10 @@ class Intersection():
         return self.visited
 
     def change_intersection(self, index, value):
-        self.intersections[index] = value
+        self.delete_later[index] = value
 
     def add_all_intersections(self, list):
-        self.intersections = list
+        self.delete_later = list
 
     def check_xy(self, x, y):
         if self.x == x and self.y == y:
@@ -484,6 +536,35 @@ class Intersection():
         else:
             return None
 
+    def 
+
+    def update_neighbours(self):
+        """
+            key of the self.intersections is an integer, see if there are any existing connections in the next neighbours
+        """
+
+        neighbours = []
+
+        x_y = [
+            [self.x+2, self.y], 
+            [self.x+2, self.y+2], 
+            [self.x,   self.y+2], 
+            [self.x-2, self.y+2], 
+            [self.x-2, self.y], 
+            [self.x-2, self.y-2], 
+            [self.x,   self.y-2], 
+            [self.x+2, self.y-2]
+        ]
+
+        for key in self.intersections:
+            if self.intersections[key]:
+                neighbours.append(x_y[key])
+
+        return neighbours
+        
+
+    def get_all_neighbours(self):
+        return self.non_visited_neighbours.extend(self.visited_neighbours)
 
 
 class Map():
