@@ -317,26 +317,23 @@ class MyRob(CRobLinkAngs):
 
         vertice = Intersection(x, y)
 
-        #backwards
-        list = []
-
         if buffert == len(buffertemp[0:4]):      #segue em frente
-            list.append(ori)
+            vertice.possible_intersections.add(ori)
 
         if buffertemp[0][2:5] == ['0', '0', '0'] and (ori in list): #afinal nao ha caminho em frente
-            list.remove(ori)
+            vertice.possible_intersections.remove(ori)
 
         if len(buffleft) >= 1:
             var = self.check_buffer_orientation(buffleft, False)
             if  var != None:
                 true_int1 = self.get_exact_sensor_value(int(var)+ori)
-                list.append(true_int1)
+                vertice.possible_intersections.add(true_int1)
 
         if len(buffright) >= 1:
             var = self.check_buffer_orientation(buffright, True)
             if  var != None:
                 true_int2 = self.get_exact_sensor_value(int(var)+ori)
-                list.append(true_int2)
+                vertice.possible_intersections.add(true_int2)
 
         if len(list) == 1:
             return list[0]
@@ -479,56 +476,34 @@ class Intersection():
         self.x = x
         self.y = y
 
-        self.visited = False
-
-        self.delete_later = []
+        #self.delete_later = []
 
         """
-            list of visited intersections
+            list of known neighbours    
         """
-        self.visited_neighbours = []
+        self.neighbours = set()
 
         """
-            list of to be visited intersections
+            list of possible paths  
         """
-        self.non_visited_neighbours = []
+        self.possible_intersections = set()
 
         """
-            0 - west
-            1 - northwest
-            2 - north
-            3 - northeast
-            4 - east
-            5 - southeast
-            6 - south
-            7 - southwest      
+            list of already visited paths    
         """
-        self.intersections = {
-            0: False,
-            1: False,
-            2: False,
-            3: False,
-            4: False,
-            5: False,
-            6: False,
-            7: False,
-        }
+        self.visited_intersections = set()
 
     def __repr__(self) -> str:
         return  "{x: " + str(self.x) + "; " +\
                 "y: " + str(self.y) + "; " +\
-                "visited?: " + str(self.visited) + "; " +\
+                "visited?: " + str(self.delete_later) + "; " +\
                 "intersections: " + str(self.intersections) + "}"
-
 
     def is_visited(self):
         return self.visited
 
-    def change_intersection(self, index, value):
-        self.delete_later[index] = value
-
-    def add_all_intersections(self, list):
-        self.delete_later = list
+    def add_neighbour(self, intersection):
+        self.neighbours.add(intersection)
 
     def check_xy(self, x, y):
         if self.x == x and self.y == y:
@@ -536,35 +511,18 @@ class Intersection():
         else:
             return None
 
-    def 
+    def add_visited_orientation(self, orientation):
+        self.visited_intersections.add(orientation)
 
-    def update_neighbours(self):
-        """
-            key of the self.intersections is an integer, see if there are any existing connections in the next neighbours
-        """
+    def add_possible_orientation(self, orientation):
+        self.possible_intersections.add(orientation)
 
-        neighbours = []
+    def get_visited_orientations(self):
+        return self.visited_intersections
 
-        x_y = [
-            [self.x+2, self.y], 
-            [self.x+2, self.y+2], 
-            [self.x,   self.y+2], 
-            [self.x-2, self.y+2], 
-            [self.x-2, self.y], 
-            [self.x-2, self.y-2], 
-            [self.x,   self.y-2], 
-            [self.x+2, self.y-2]
-        ]
-
-        for key in self.intersections:
-            if self.intersections[key]:
-                neighbours.append(x_y[key])
-
-        return neighbours
+    def get_possible_orientations(self):
+        return self.possible_intersections
         
-
-    def get_all_neighbours(self):
-        return self.non_visited_neighbours.extend(self.visited_neighbours)
 
 
 class Map():
