@@ -175,6 +175,7 @@ class MyRob(CRobLinkAngs):
         """
         This function takes the position of the robot the sensor value of the line where he is at the moment and return the position to have as a next goal
         """
+        print("Sensor:",sensor)
         new_goal = None
         possible_new_goals = [[x+2, y],[x+2, y+2],[x, y+2],[x-2, y+2],[x-2, y],[x-2, y],[x+2, y-2],[x, y-2],[x-2, y-2]]
         sensor_values = [0,45,90,135,180,-180,-45,-90,-135]
@@ -197,58 +198,38 @@ class MyRob(CRobLinkAngs):
             if possible_orientations[i] == orientation:
                 return return_indexes[i]
     
-    def get_middle_buffer_paths(self,buffer):
+    def get_middle_buffer_paths(self,buffer,exact_sensor):
         counter = 0
         for b in buffer:
             if b.count('1') >= len(b)-1:
                 counter+=1
         if counter < len(buffer)-1:
             return []
-        return [0]
+        return [exact_sensor]
     
-    def get_left_buffer_paths(self,buffer):
-        while True:
-            if not buffer:
-                return []
-            if buffer[-1] == ['0','0']:
-                buffer = buffer[:-1]
-            else:
-                break
+    def get_left_buffer_paths(self,buffer,exact_sensor):
         paths = []
-        if buffer[-1] == ['0','1']:
-            if buffer[-2] == ['1','1']:
-                paths.append(45)
-        elif buffer[-1] == ['1','0']:
-            if buffer[-2] == ['1','1']:
-                paths.append(135)
-        elif buffer[-1] == ['1','1']:
-            paths.append(90)
-        else:
-            print("error get_left_buffer_paths")
-            print(buffer)
+        if buffer == [['1','1'],['0','1'],['0','0']] or buffer == [['1', '0'], ['1', '1'], ['0', '1'], ['0', '0']]:
+            paths.append(45+exact_sensor)
+        elif buffer == [['0','1']]:
+            paths.append(135+exact_sensor)
+        elif buffer == [['0', '0'], ['1', '1'], ['0', '0']]  or buffer == [['0','0'],['1','1']]:
+            paths.append(90+exact_sensor)
+        
+        for i in range(len(paths)):
+            if paths[i] > 180:
+                paths[i] = paths[i] - 360
         
         return paths
     
     def get_right_buffer_paths(self,buffer,exact_sensor):
-        while True:
-            if not buffer:
-                return []
-            if buffer[-1] == ['0','0']:
-                buffer = buffer[:-1]
-            else:
-                break
         paths = []
-        if buffer[-1] == ['1','0']:
-            if buffer[-2] == ['1','1']:
-                paths.append(exact_sensor+(-45))
-        elif buffer[-1] == ['0','1']:
-            if buffer[-2] == ['1','1']:
-                paths.append(exact_sensor+(-135))
-        elif buffer[-1] == ['1','1']:
-            paths.append(exact_sensor+(-90))
-        else:
-            print("error get_right_buffer_paths")
-            print(buffer)
+        if buffer == [['0', '1'], ['1', '1'], ['1', '0'], ['0', '0']] or buffer == [['0', '0'], ['0', '1'], ['0', '0'], ['1', '1']]:
+            paths.append(-45+exact_sensor)
+        elif buffer == [['0','1']]:
+            paths.append(-135+exact_sensor)
+        elif buffer == [['0','0'],['1','1'],['0','0']] or buffer == [['0','0'],['1','1']]:
+            paths.append(-90+exact_sensor)
         
         for i in range(len(paths)):
             if paths[i] < -180:
@@ -261,6 +242,15 @@ class MyRob(CRobLinkAngs):
             if buffer[-1] == to_be_removed:
                 buffer = buffer[:-1]
         return buffer
+    
+    def simplify_buffer(self,buffer):
+        simplified_buffer = []
+        last = None
+        for b in buffer:
+            if b != last:
+                simplified_buffer.append(b)
+            last = b
+        return simplified_buffer
             
     def get_open_paths_for_intersection(self,buffer,x,y,exact_sensor):
         print("exact_sensor:",exact_sensor)
@@ -272,15 +262,23 @@ class MyRob(CRobLinkAngs):
             left_buffer.append(line[:2])
             right_buffer.append(line[5:])
             middle_buffer.append(line[2:5])
-        
-        open_paths = []
-        open_paths.extend(self.get_left_buffer_paths(left_buffer))
-        open_paths.extend(self.get_right_buffer_paths(right_buffer,exact_sensor))
-        open_paths.extend(self.get_middle_buffer_paths(middle_buffer))
-        
+            
         #print("left_buffer:",left_buffer)
         #print("right_buffer:",right_buffer)
         #print("middle_buffer:",middle_buffer)
+        
+        l = self.simplify_buffer(left_buffer)
+        r = self.simplify_buffer(right_buffer)
+        m = self.simplify_buffer(middle_buffer)
+        
+        print("l:",l)
+        print("r:",r)
+        print("m:",m)
+        
+        open_paths = []
+        open_paths.extend(self.get_left_buffer_paths(l,exact_sensor))
+        open_paths.extend(self.get_right_buffer_paths(r,exact_sensor))
+        open_paths.extend(self.get_middle_buffer_paths(m,exact_sensor))
          
         print("open_paths:",open_paths)
                    
@@ -307,11 +305,13 @@ class MyRob(CRobLinkAngs):
             buffer.append(BUFFER_DEFAULT)
             
         velSetPoint = 0.08
-
+        
         sensor = self.measures.compass
         exact_sensor = self.get_exact_sensor_value(sensor)
         #print(exact_sensor)
-
+        
+        last_sensor = 0
+        
         goal = self.get_next_goal(exact_sensor, 0, 0)
         
         #keys = (x,y) values = open_paths
@@ -323,6 +323,10 @@ class MyRob(CRobLinkAngs):
             line = self.measures.lineSensor
             sensor = self.measures.compass
             #print("Sensor:",sensor)
+            
+            if abs(sensor) > 170:
+                if (last_sensor<0 and sensor >0) or (last_sensor>0 and sensor<0):
+                    sensor = last_sensor
 
             x = self.measures.x - pos_inicial_real[0]
             y = self.measures.y - pos_inicial_real[1]
@@ -353,16 +357,9 @@ class MyRob(CRobLinkAngs):
             elif abs(x-goal[0]) <= 0.3 and abs(y-goal[1]) <= 0.3:           #esta se a aproximar, nao vale a pena usar PID que oscila demasiado
                 #print("start slowing down")
                 self.driveMotors(0.04, 0.04)
-
             else:
-
-                if self.get_exact_sensor_value(sensor)==180:    #existe muita disparidade
-                    print("here")
-                    if sensor<0:                                #na parte negativa
-                        expr = (sensor - alpha)
-                        pass
-                    else:                                       #na parte positiva
-                        pass
+                print(sensor)
+                    
 
             alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
             expr = (sensor - alpha)
@@ -377,6 +374,8 @@ class MyRob(CRobLinkAngs):
 
             buffer = buffer[0:BUFFER_SIZE]
             buffer = [line] + buffer
+            
+            last_sensor = sensor
             
             #aqui vemos ja passamos por certos locais
             if (orientation_string != "-" and orientation_string != "|"):
