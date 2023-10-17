@@ -10,7 +10,7 @@ CELLCOLS=14
 class MyRob(CRobLinkAngs):
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
-        self.h = 0.0085
+        self.h = 0.050
 
         self.Kp = 1
         self.Ti = 1/self.h
@@ -199,22 +199,19 @@ class MyRob(CRobLinkAngs):
                 return return_indexes[i]
     
     def get_middle_buffer_paths(self,buffer,exact_sensor):
-        counter = 0
         for b in buffer:
-            if b.count('1') >= len(b)-1:
-                counter+=1
-        if counter < len(buffer)-1:
-            return []
+            if b.count('1') <= len(b)-2:
+                return []
         return [exact_sensor]
     
     def get_left_buffer_paths(self,buffer,exact_sensor):
         paths = []
-        if buffer == [['1','1'],['0','1'],['0','0']] or buffer == [['1', '0'], ['1', '1'], ['0', '1'], ['0', '0']]:
-            paths.append(45+exact_sensor)
+        if self.is_sublist_of(buffer,[['0', '0'], ['1', '1']]) or self.is_sublist_of(buffer,[['0', '0'], ['1', '1']]):
+            paths.append(90+exact_sensor)
         elif buffer == [['0','1']]:
             paths.append(135+exact_sensor)
-        elif buffer == [['0', '0'], ['1', '1'], ['0', '0']]  or buffer == [['0','0'],['1','1']]:
-            paths.append(90+exact_sensor)
+        elif self.is_sublist_of(buffer,[['1', '0'], ['1', '1'], ['0', '1']])  or self.is_sublist_of(buffer,[['1', '1'], ['0', '1']]):
+            paths.append(45+exact_sensor)
         
         for i in range(len(paths)):
             if paths[i] > 180:
@@ -224,17 +221,24 @@ class MyRob(CRobLinkAngs):
     
     def get_right_buffer_paths(self,buffer,exact_sensor):
         paths = []
-        if buffer == [['0', '1'], ['1', '1'], ['1', '0'], ['0', '0']] or buffer == [['0', '0'], ['0', '1'], ['0', '0'], ['1', '1']]:
-            paths.append(-45+exact_sensor)
+        if self.is_sublist_of(buffer,[['0','0'],['1','1']]) or self.is_sublist_of(buffer,[['0', '0'], ['1', '1']]):
+            paths.append(-90+exact_sensor)
         elif buffer == [['0','1']]:
             paths.append(-135+exact_sensor)
-        elif buffer == [['0','0'],['1','1'],['0','0']] or buffer == [['0','0'],['1','1']]:
-            paths.append(-90+exact_sensor)
+        elif self.is_sublist_of(buffer,[['0', '1'], ['1', '1'], ['1', '0']]) or self.is_sublist_of(buffer,[['1', '1'], ['1', '0']]):
+            paths.append(-45+exact_sensor)
         
         for i in range(len(paths)):
             if paths[i] < -180:
                 paths[i] = paths[i] + 360    
         return paths
+    
+    def is_sublist_of(self,_list,sublist):
+        #print("list:",_list)
+        #print("sublist:",sublist)
+        #print("is sublist? ",any(sublist == _list[i:i+len(sublist)] for i in range(len(_list))))
+        return any(sublist == _list[i:i+len(sublist)] for i in range(len(_list)))
+
     
     def remove_until_different(self,buffer):
         to_be_removed = buffer[-1]
@@ -263,9 +267,9 @@ class MyRob(CRobLinkAngs):
             right_buffer.append(line[5:])
             middle_buffer.append(line[2:5])
             
-        #print("left_buffer:",left_buffer)
-        #print("right_buffer:",right_buffer)
-        #print("middle_buffer:",middle_buffer)
+        print("left_buffer:",left_buffer)
+        print("right_buffer:",right_buffer)
+        print("middle_buffer:",middle_buffer)
         
         l = self.simplify_buffer(left_buffer)
         r = self.simplify_buffer(right_buffer)
@@ -310,7 +314,10 @@ class MyRob(CRobLinkAngs):
         exact_sensor = self.get_exact_sensor_value(sensor)
         #print(exact_sensor)
         
+        alpha = sensor
+        
         last_sensor = 0
+        last_alpha = 0
         
         goal = self.get_next_goal(exact_sensor, 0, 0)
         
@@ -324,7 +331,7 @@ class MyRob(CRobLinkAngs):
             sensor = self.measures.compass
             #print("Sensor:",sensor)
             
-            if abs(sensor) > 170:
+            if abs(sensor) > 100:
                 if (last_sensor<0 and sensor >0) or (last_sensor>0 and sensor<0):
                     sensor = last_sensor
 
@@ -334,7 +341,7 @@ class MyRob(CRobLinkAngs):
             orientation_string = self.get_orientation_string(sensor)
             #print("orientation:",orientation_string)
             
-            if abs(x-goal[0]) <= 0.05 and abs(y-goal[1]) <= 0.05:
+            if abs(x-goal[0]) <= 0.15 and abs(y-goal[1]) <= 0.15:
                 #print("Exact sensor value:", self.get_exact_sensor_value(sensor))
                 if (round(x),round(y)) not in intersections:
                     intersections[(round(x),round(y))] = set()
@@ -358,14 +365,19 @@ class MyRob(CRobLinkAngs):
                 #print("start slowing down")
                 self.driveMotors(0.04, 0.04)
             else:
-                print(sensor)
+                pass
+                #print(sensor)
                     
 
             alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
+            if abs(alpha-sensor) > 180:
+                alpha *= -1
+            print("alpha:",alpha)
+            print("sensor:",sensor)
             expr = (sensor - alpha)
             #print("expr", expr)
             
-            u = self.PID(0,expr*0.02)*0.5
+            u = self.PID(0,expr*0.02)*0.8
 
             lPow = velSetPoint - u
             rPow = velSetPoint + u          
@@ -376,6 +388,7 @@ class MyRob(CRobLinkAngs):
             buffer = [line] + buffer
             
             last_sensor = sensor
+            last_alpha = alpha
             
             #aqui vemos ja passamos por certos locais
             if (orientation_string != "-" and orientation_string != "|"):
