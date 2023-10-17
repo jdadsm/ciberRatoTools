@@ -1,4 +1,3 @@
-
 from asyncio import sleep
 import sys
 from croblink import *
@@ -46,8 +45,6 @@ class MyRob(CRobLinkAngs):
         K2 = self.Kp*self.Td/self.h
         
         e = r-y
-
-        print("em1", self.e_m1)
         
         u = self.u_m1 + K0*e + K1*self.e_m1 + K2*self.e_m2
             
@@ -68,21 +65,6 @@ class MyRob(CRobLinkAngs):
     def printMap(self):
         for l in reversed(self.labMap):
             print(''.join([str(l) for l in l]))
-
-    
-    def calculate_ones(self, line):
-        """ 
-        This function receives the sensor line array and returns an integer value 
-            - positive value -> right array is predominant -> the robot must turn right
-            - negative value -> left array is predominant -> the robot must turn left
-            - zero -> right and left arrays are balanced -> the robot keeps going forward
-        """
-        ones_left = line[0:4].count("1")
-        ones_right = line[3:7].count("1")
-        #print(line)
-        #print(ones_right-ones_left)
-        return ones_left-ones_right
-
 
     def print_map(self):
         for line in reversed(self.map):
@@ -105,7 +87,6 @@ class MyRob(CRobLinkAngs):
                     file.write(element)
             file.write('\n')
         file.close()
-        pass
 
     def get_orientation_string(self, sensor):
         """this function takes a sensor value and converts it to a string representation of an orientation:
@@ -150,7 +131,7 @@ class MyRob(CRobLinkAngs):
         posOverLine = 0
         nActiveSensors = 0
         
-        for i in range(7):
+        for i in range(len(line)):
             if line[i] == "1":
                 posOverLine += i-3
                 nActiveSensors+=1
@@ -189,180 +170,121 @@ class MyRob(CRobLinkAngs):
             return -45
         else:
             return None
-
-    def check_buffer_orientation(self, buffer, right):
-        # intersecoes retas
-        if buffer.count(['1', '1']) == len(buffer) and len(buffer)>=2:
-            if right:
-                return -90
-            else:
-                return 90
-            
-        print(len(buffer))
-        print("")
-        if len(buffer) == 1:
-            if buffer[0] == ['1','1']:
-                if right:
-                    return -90
-                else:
-                    return 90
-            return None
-
-        # intersecoes diagonais
-        if buffer[0] == ['0', '1']:
-            if buffer[1] == ['1', '1']:
-                if right:
-                    return -45
-                else:
-                    return 135
-
-            if buffer[1] == buffer[0]:
-                return self.check_buffer_orientation(buffer[1:], right)
-
-        elif buffer[0] == ['1', '0']:
-            if buffer[1] == ['1', '1']:
-                if right:
-                    return -135
-                else:
-                    return 45
-            if buffer[1] == buffer[0]:
-                return self.check_buffer_orientation(buffer[1:], right)
-        
-        elif buffer[0] == ['1', '1']: 
-            if buffer[1] == ['1', '0']:
-                if right:
-                    return -45
-                else:
-                    return 135
-
-            if buffer[1] == ['0', '1']:
-                if right:
-                    return -135
-                else:
-                    return 45 
-
-            if buffer[1] == buffer[0]:
-                return self.check_buffer_orientation(buffer[1:], right)
-            pass
-
-        return None
     
     def get_next_goal(self, sensor, x, y):
         """
         This function takes the position of the robot the sensor value of the line where he is at the moment and return the position to have as a next goal
         """
-        if sensor == 0:
-            return [x+2, y]
-        if sensor == 45:
-            return [x+2, y+2]
-        if sensor == 90:
-            return [x, y+2]
-        if sensor == 135:
-            return [x-2, y+2]
-        if sensor == -180 or sensor == 180:
-            return [x-2, y]
-        if sensor == -45:
-            return [x+2, y-2]
-        if sensor == -90:
-            return [x, y-2]
-        if sensor == -135:
-            return [x-2, y-2]
-        return None
-
-    def convert_orientation_to_list_index(self, ori):
-        if ori == 0:
-            return 0
-        if ori == 45:
-            return 1
-        if ori == 90:
-            return 2
-        if ori == 135:
-            return 3
-        if ori == 180 or ori == -180:
-            return 4
-        if ori == -135:
-            return 5
-        if ori == -90:
-            return 6
-        if ori == -45:
-            return 7
-
-    #this will return the current orientation
-    def get_intersection_type(self, buffertemp, ori, x, y, current):
+        new_goal = None
+        possible_new_goals = [[x+2, y],[x+2, y+2],[x, y+2],[x-2, y+2],[x-2, y],[x-2, y],[x+2, y-2],[x, y-2],[x-2, y-2]]
+        sensor_values = [0,45,90,135,180,-180,-45,-90,-135]
         
-        print("original buffer", buffertemp)
+        for i in range(len(possible_new_goals)):
+            if sensor == sensor_values[i]:
+                new_goal = possible_new_goals[i]
         
-        #buffertemp [0:3] e muito a frente do ponto onde a verificacao é feita
-        buffert = [line[3] for line in buffertemp[0:4]].count('1')
+        if new_goal:
+            print("New goal:",new_goal)
+        else:
+            print("Error in get_next_goal")
+        return new_goal
+
+    def convert_orientation_to_list_index(self, orientation):
+        possible_orientations = [0,45,90,135,180,-180,-135,-90,-45]
+        return_indexes = [0,1,2,3,4,4,5,6,7]
         
-        #print("buffer: " + str(buffer))
-        print("x", x)
-        print("y", y)
-
-        #buffertemp [3:8] e muito a frente do ponto onde a verificacao é feita
-        buffer = [line for line in buffertemp[2:8] if line!=['0', '0', '0', '0', '0', '0', '0']]
-        print("buffer: " + str(buffer))
-        buffleft = [line[0:2] for line in buffer if line[0:2]!=['0', '0']]
-        buffright = [line[5:7] for line in buffer if line[5:7]!=['0', '0']]
-
-        vertice = None
-
-        if self.vertices != []:
-            for tvertice in self.vertices:
-                if tvertice.check_xy(x, y):      #there is already a vertice with those coordinates
-                    vertice = tvertice
-
-        if vertice != None:                     # no need to execute further code, data is already inside the lists
-            return current
-
-        vertice = Intersection(x, y)
-
-        if buffert == len(buffertemp[0:4]):      #segue em frente
-            vertice.possible_intersections.add(ori)
-
-        if buffertemp[0][2:5] == ['0', '0', '0'] and (ori in list): #afinal nao ha caminho em frente
-            vertice.possible_intersections.remove(ori)
-
-        if len(buffleft) >= 1:
-            var = self.check_buffer_orientation(buffleft, False)
-            if  var != None:
-                true_int1 = self.get_exact_sensor_value(int(var)+ori)
-                vertice.possible_intersections.add(true_int1)
-
-        if len(buffright) >= 1:
-            var = self.check_buffer_orientation(buffright, True)
-            if  var != None:
-                true_int2 = self.get_exact_sensor_value(int(var)+ori)
-                vertice.possible_intersections.add(true_int2)
-
-        if len(list) == 1:
-            return list[0]
+        for i in range(len(possible_orientations)):
+            if possible_orientations[i] == orientation:
+                return return_indexes[i]
+    
+    def get_middle_buffer_paths(self,buffer):
+        counter = 0
+        for b in buffer:
+            if b.count('1') >= len(b)-1:
+                counter+=1
+        if counter < len(buffer)-1:
+            return []
+        return [0]
+    
+    def get_left_buffer_paths(self,buffer):
+        while True:
+            if not buffer:
+                return []
+            if buffer[-1] == ['0','0']:
+                buffer = buffer[:-1]
+            else:
+                break
+        paths = []
+        if buffer[-1] == ['0','1']:
+            if buffer[-2] == ['1','1']:
+                paths.append(45)
+        elif buffer[-1] == ['1','0']:
+            if buffer[-2] == ['1','1']:
+                paths.append(135)
+        elif buffer[-1] == ['1','1']:
+            paths.append(90)
+        else:
+            print("error get_left_buffer_paths")
+            print(buffer)
         
-        elif list == []:
-            print("dead end")
-            return self.get_exact_sensor_value(180-ori) #go backwards
-
-        print("intersections", list)
-
-        # by now, the list should be filled with all intersections in a given point 
-        vertice.add_all_intersections(list[1:])
+        return paths
+    
+    def get_right_buffer_paths(self,buffer,exact_sensor):
+        while True:
+            if not buffer:
+                return []
+            if buffer[-1] == ['0','0']:
+                buffer = buffer[:-1]
+            else:
+                break
+        paths = []
+        if buffer[-1] == ['1','0']:
+            if buffer[-2] == ['1','1']:
+                paths.append(exact_sensor+(-45))
+        elif buffer[-1] == ['0','1']:
+            if buffer[-2] == ['1','1']:
+                paths.append(exact_sensor+(-135))
+        elif buffer[-1] == ['1','1']:
+            paths.append(exact_sensor+(-90))
+        else:
+            print("error get_right_buffer_paths")
+            print(buffer)
         
-        return list[0]
+        for i in range(len(paths)):
+            if paths[i] < -180:
+                paths[i] = paths[i] + 360    
+        return paths
+    
+    def remove_until_different(self,buffer):
+        to_be_removed = buffer[-1]
+        while buffer:
+            if buffer[-1] == to_be_removed:
+                buffer = buffer[:-1]
+        return buffer
+            
+    def get_open_paths_for_intersection(self,buffer,x,y,exact_sensor):
+        print("exact_sensor:",exact_sensor)
+        left_buffer = []
+        right_buffer = []
+        middle_buffer = []
         
-    def check_if_not_inline(self, buffer, outside):
-        """
-            assim que o buffer detetar tudo a zeros, voltar para o ultimo nó (que deverá ser o mais proximo)
-            e ver as intersecoes de novo 
-
-            devolve:
-                - orientacao a ir
-                - ultimo nó
-        """
-        if outside:
-            buffer_ = [line for line in buffer if line!=['0','0','0','0','0','0','0']]
-            if len(buffer_) == 0:
-                return self.get_exact_sensor_value(self.last_orientation-180), self.last_goal
-        pass
+        for line in buffer:
+            left_buffer.append(line[:2])
+            right_buffer.append(line[5:])
+            middle_buffer.append(line[2:5])
+        
+        open_paths = []
+        open_paths.extend(self.get_left_buffer_paths(left_buffer))
+        open_paths.extend(self.get_right_buffer_paths(right_buffer,exact_sensor))
+        open_paths.extend(self.get_middle_buffer_paths(middle_buffer))
+        
+        #print("left_buffer:",left_buffer)
+        #print("right_buffer:",right_buffer)
+        #print("middle_buffer:",middle_buffer)
+         
+        print("open_paths:",open_paths)
+                   
+        return open_paths
 
     def run(self):
 
@@ -386,49 +308,53 @@ class MyRob(CRobLinkAngs):
             
         velSetPoint = 0.08
 
-        #this should always be 0 at the beginning
         sensor = self.measures.compass
         exact_sensor = self.get_exact_sensor_value(sensor)
         #print(exact_sensor)
 
         goal = self.get_next_goal(exact_sensor, 0, 0)
-        print(goal)
+        
+        #keys = (x,y) values = open_paths
+        intersections = {}
             
         while True:
             self.readSensors()
             
             line = self.measures.lineSensor
-            sensor = self.measures.compass #compass - em graus 
+            sensor = self.measures.compass
             #print("Sensor:",sensor)
 
-            """cada quadrado tem 2 unidades de medida -> verificar qual a orientacao no meio de cada quadrado"""
             x = self.measures.x - pos_inicial_real[0]
             y = self.measures.y - pos_inicial_real[1]
 
-            #ajustar o robo nas linhas
             orientation_string = self.get_orientation_string(sensor)
             #print("orientation:",orientation_string)
             
-            #posOverLine = self.getLinePos(line)
-            #print("posOverLine:",posOverLine)
-            #print(posOverLine)
-            
-            if abs(x-goal[0]) <= 0.1 and abs(y-goal[1]) <= 0.1:
-                buffer_ = buffer[0:8]
+            if abs(x-goal[0]) <= 0.05 and abs(y-goal[1]) <= 0.05:
                 #print("Exact sensor value:", self.get_exact_sensor_value(sensor))
-                exact_sensor = self.get_intersection_type(buffer_, self.get_exact_sensor_value(sensor), round(x), round(y), exact_sensor)
+                if (round(x),round(y)) not in intersections:
+                    intersections[(round(x),round(y))] = set()
                 
-                self.last_goal = goal
-                
-                goal = self.get_next_goal(exact_sensor,goal[0],goal[1]) 
-                continue
+                    open_paths = self.get_open_paths_for_intersection(buffer,x,y,self.get_exact_sensor_value(sensor))
+                    
+                    for path in open_paths:
+                        if path not in intersections[(round(x),round(y))]:
+                            intersections[(round(x),round(y))].add(path)
+                    
+                    print("intersections:",intersections)
+                    
+                    if intersections[(round(x),round(y))]:  # if there are still open paths in this intersection, choose one and explore it
+                        self.last_goal = goal
+                        goal = self.get_next_goal(intersections[(round(x),round(y))].pop(),goal[0],goal[1]) 
+                    else:                                   # if not go back
+                        # MUDAR QUANDO CONSEGUIRMOS DIFERENCIAR ENTRE TER UMA INTERSEÇÃO TOTALMENTE EXPLORADA E UM DEADEND 
+                        self.last_goal,goal = goal,self.last_goal
 
             elif abs(x-goal[0]) <= 0.3 and abs(y-goal[1]) <= 0.3:           #esta se a aproximar, nao vale a pena usar PID que oscila demasiado
-                print("start slowing down")
+                #print("start slowing down")
                 self.driveMotors(0.04, 0.04)
 
             else:
-                alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
 
                 if self.get_exact_sensor_value(sensor)==180:    #existe muita disparidade
                     print("here")
@@ -438,23 +364,16 @@ class MyRob(CRobLinkAngs):
                     else:                                       #na parte positiva
                         pass
 
-
-                expr = (sensor - alpha)
-                print("expr", expr)
-                
-                u = self.PID(0,expr*0.02)*0.5
-
-                lPow = velSetPoint - u
-                rPow = velSetPoint + u          
-
-                self.driveMotors(lPow,rPow)
+            alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
+            expr = (sensor - alpha)
+            #print("expr", expr)
             
-            #resolver disparacao entre orientacao real ser -180 e variar muito para 180
+            u = self.PID(0,expr*0.02)*0.5
 
-            #estou fora das linhas? É melhor ver como esta a intersecao
+            lPow = velSetPoint - u
+            rPow = velSetPoint + u          
 
-
-            print("goal", goal)
+            self.driveMotors(lPow,rPow)
 
             buffer = buffer[0:BUFFER_SIZE]
             buffer = [line] + buffer
@@ -470,61 +389,6 @@ class MyRob(CRobLinkAngs):
                     self.print_map_to_file()
 
             
-
-class Intersection():
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-        #self.delete_later = []
-
-        """
-            list of known neighbours    
-        """
-        self.neighbours = set()
-
-        """
-            list of possible paths  
-        """
-        self.possible_intersections = set()
-
-        """
-            list of already visited paths    
-        """
-        self.visited_intersections = set()
-
-    def __repr__(self) -> str:
-        return  "{x: " + str(self.x) + "; " +\
-                "y: " + str(self.y) + "; " +\
-                "visited?: " + str(self.delete_later) + "; " +\
-                "intersections: " + str(self.intersections) + "}"
-
-    def is_visited(self):
-        return self.visited
-
-    def add_neighbour(self, intersection):
-        self.neighbours.add(intersection)
-
-    def check_xy(self, x, y):
-        if self.x == x and self.y == y:
-            return self
-        else:
-            return None
-
-    def add_visited_orientation(self, orientation):
-        self.visited_intersections.add(orientation)
-
-    def add_possible_orientation(self, orientation):
-        self.possible_intersections.add(orientation)
-
-    def get_visited_orientations(self):
-        return self.visited_intersections
-
-    def get_possible_orientations(self):
-        return self.possible_intersections
-        
-
-
 class Map():
     def __init__(self, filename):
         tree = ET.parse(filename)
