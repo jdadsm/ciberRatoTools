@@ -199,14 +199,29 @@ class MyRob(CRobLinkAngs):
                 return return_indexes[i]
     
     def get_middle_buffer_paths(self,buffer,exact_sensor):
+        print("in middle buffer")
+        paths = []
+        middle_left_buffer = self.get_left_buffer_paths(buffer, exact_sensor)
+        middle_right_buffer = self.get_right_buffer_paths(buffer, exact_sensor)
+
+        paths.append(exact_sensor)
+
         for b in buffer:
             if b.count('1') <= len(b)-2:
-                return []
-        return [exact_sensor]
+                if exact_sensor in paths:
+                    print("here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    print(b.count("1"))
+                    print(len(b)-2)
+                    paths.remove(exact_sensor)      #there is no path forward
+
+        paths.extend(middle_left_buffer)
+        paths.extend(middle_right_buffer)
+
+        return paths
     
     def get_left_buffer_paths(self,buffer,exact_sensor):
         paths = []
-        if self.is_sublist_of(buffer,[['0', '0'], ['1', '1']]) or self.is_sublist_of(buffer,[['0', '0'], ['1', '1']]):
+        if self.is_sublist_of(buffer,[['0', '0'], ['1', '1']]):
             paths.append(90+exact_sensor)
         elif buffer == [['0','1']]:
             paths.append(135+exact_sensor)
@@ -221,7 +236,7 @@ class MyRob(CRobLinkAngs):
     
     def get_right_buffer_paths(self,buffer,exact_sensor):
         paths = []
-        if self.is_sublist_of(buffer,[['0','0'],['1','1']]) or self.is_sublist_of(buffer,[['0', '0'], ['1', '1']]):
+        if self.is_sublist_of(buffer,[['0','0'],['1','1']]):
             paths.append(-90+exact_sensor)
         elif buffer == [['0','1']]:
             paths.append(-135+exact_sensor)
@@ -377,7 +392,7 @@ class MyRob(CRobLinkAngs):
             expr = (sensor - alpha)
             #print("expr", expr)
             
-            u = self.PID(0,expr*0.02)*0.8
+            u = self.PID(0,expr*0.02)*0.5
 
             lPow = velSetPoint - u
             rPow = velSetPoint + u          
