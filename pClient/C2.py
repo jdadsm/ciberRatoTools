@@ -471,7 +471,6 @@ class MyRob(CRobLinkAngs):
                     if intersections[(self.last_goal[0], self.last_goal[1])]: #this is redudant
                         #the intersection is already pop'd
                         goal = self.last_goal
-
             
             last_sensor = sensor
             last_alpha = alpha

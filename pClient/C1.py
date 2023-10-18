@@ -13,7 +13,7 @@ class MyRob(CRobLinkAngs):
     
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
-        self.h = 0.050
+        self.h = 0.0085
 
         self.Kp = 1
         self.Ti = 1/self.h
@@ -89,7 +89,7 @@ class MyRob(CRobLinkAngs):
         self.readSensors()
 
         BUFFER_DEFAULT = ["0","0","1","1","1","0","0"]      
-        BUFFER_SIZE = 2
+        BUFFER_SIZE = 5
         buffer = []
         for i in range(BUFFER_SIZE):
             buffer.append(BUFFER_DEFAULT)
@@ -102,7 +102,11 @@ class MyRob(CRobLinkAngs):
             line = self.measures.lineSensor
             
             #print("Line:",line)
-            
+            original_line = line
+            for i in range(len(line)):
+                if line[i] != buffer[0][i]:        #0 e 1, 1 tem mais peso
+                    line[i] == "1"
+
             posOverLine = self.getLinePos(line)
             
             #print("posOverLine:",posOverLine)
@@ -111,7 +115,7 @@ class MyRob(CRobLinkAngs):
                 val = 0
                 for l in buffer:
                     val+=self.calculate_ones(l)
-                #print("val:",val)
+                #rint("val:",val)
                 #print("buffer:",buffer)
                 if val > 0:
                     self.driveMotors(-0.15,0.15)
@@ -119,13 +123,14 @@ class MyRob(CRobLinkAngs):
                     self.driveMotors(0.15,-0.15)
                 continue
             
-            lPow = velSetPoint - self.PID(0,posOverLine)
-            rPow = velSetPoint + self.PID(0,posOverLine)
+            PID = self.PID(0, posOverLine)
+            lPow = velSetPoint - PID
+            rPow = velSetPoint + PID
             
             self.driveMotors(lPow,rPow)
             
             buffer = buffer[0:BUFFER_SIZE]
-            buffer = [line] + buffer
+            buffer = [original_line] + buffer
             
 
 
