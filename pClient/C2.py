@@ -225,13 +225,13 @@ class MyRob(CRobLinkAngs):
             return paths
         if self.is_sublist_of(buffer,[['0', '0'], ['1', '1']]):
             paths.append(90+exact_sensor)
-        elif buffer == [['0','1']]:
+        elif self.is_sublist_of(buffer,[['0', '0'], ['0', '1'], ['1', '1']]):
             paths.append(135+exact_sensor)
         elif self.is_sublist_of(buffer,[['1', '0'], ['1', '1'], ['0', '1']])  or self.is_sublist_of(buffer,[['1', '1'], ['0', '1']]):
             paths.append(45+exact_sensor)
         
         for i in range(len(paths)):
-            if paths[i] > 180:
+            if paths[i] >= 180:
                 paths[i] = paths[i] - 360
         
         return paths
