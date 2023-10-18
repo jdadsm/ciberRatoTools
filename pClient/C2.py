@@ -20,7 +20,7 @@ class MyRob(CRobLinkAngs):
         self.e_m2 = 0
         self.u_m1 = 0
 
-        self.max_u = 5
+        self.max_u = 40
 
         #list of intersections
         self.vertices = []
@@ -161,7 +161,7 @@ class MyRob(CRobLinkAngs):
         elif (sensor >= 112.5 and sensor <= 157.5):
             return 135
         elif (sensor >= 157.5 and sensor <= 180) or (sensor <= -157.5 and sensor >= -180):
-            return 180
+            return -180
         elif (sensor >= -157.5 and sensor <=-112.5):
             return -135
         elif (sensor >= -112.5 and sensor <= -67.5):
@@ -178,7 +178,7 @@ class MyRob(CRobLinkAngs):
         print("Sensor:",sensor)
         new_goal = None
         possible_new_goals = [[x+2, y],[x+2, y+2],[x, y+2],[x-2, y+2],[x-2, y],[x-2, y],[x+2, y-2],[x, y-2],[x-2, y-2]]
-        sensor_values = [0,45,90,135,180,-180,-45,-90,-135]
+        sensor_values = [0,45,90,135,-180,-180,-45,-90,-135]
         
         for i in range(len(possible_new_goals)):
             if sensor == sensor_values[i]:
@@ -191,7 +191,7 @@ class MyRob(CRobLinkAngs):
         return new_goal
 
     def convert_orientation_to_list_index(self, orientation):
-        possible_orientations = [0,45,90,135,180,-180,-135,-90,-45]
+        possible_orientations = [0,45,90,135,-180,-180,-135,-90,-45]
         return_indexes = [0,1,2,3,4,4,5,6,7]
         
         for i in range(len(possible_orientations)):
@@ -221,6 +221,8 @@ class MyRob(CRobLinkAngs):
     
     def get_left_buffer_paths(self,buffer,exact_sensor):
         paths = []
+        if len(buffer) <= 1:
+            return paths
         if self.is_sublist_of(buffer,[['0', '0'], ['1', '1']]):
             paths.append(90+exact_sensor)
         elif buffer == [['0','1']]:
@@ -236,6 +238,8 @@ class MyRob(CRobLinkAngs):
     
     def get_right_buffer_paths(self,buffer,exact_sensor):
         paths = []
+        if len(buffer) <= 1:
+            return paths
         if self.is_sublist_of(buffer,[['0','0'],['1','1']]):
             paths.append(-90+exact_sensor)
         elif buffer == [['0','1']]:
@@ -338,6 +342,9 @@ class MyRob(CRobLinkAngs):
         
         #keys = (x,y) values = open_paths
         intersections = {}
+        
+        alpha_extra_laps = 0
+        sensor_extra_laps = 0
             
         while True:
             self.readSensors()
@@ -346,9 +353,7 @@ class MyRob(CRobLinkAngs):
             sensor = self.measures.compass
             #print("Sensor:",sensor)
             
-            if abs(sensor) > 100:
-                if (last_sensor<0 and sensor >0) or (last_sensor>0 and sensor<0):
-                    sensor = last_sensor
+            
 
             x = self.measures.x - pos_inicial_real[0]
             y = self.measures.y - pos_inicial_real[1]
@@ -383,16 +388,35 @@ class MyRob(CRobLinkAngs):
                 pass
                 #print(sensor)
                     
-
+            #print("goal:",goal)
+            #print("xy:",[x,y])
+            
+            
             alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
-            if abs(alpha-sensor) > 180:
-                alpha *= -1
-            print("alpha:",alpha)
-            print("sensor:",sensor)
-            expr = (sensor - alpha)
+            #print("pre alpha:",alpha)
+            
+            if abs(sensor-last_sensor) > 180:
+                if sensor > 0:
+                    sensor_extra_laps-=1
+                else:
+                    sensor_extra_laps+=1
+            
+            if abs(alpha-last_alpha) > 180:
+                if alpha > 0:
+                    alpha_extra_laps-=1
+                else:
+                    alpha_extra_laps+=1
+            
+            
+                
+            print("alpha:",alpha + alpha_extra_laps*360)
+            print("sensor:",sensor + sensor_extra_laps*360)
+            expr = ((sensor + sensor_extra_laps*360) - (alpha + alpha_extra_laps*360))
             #print("expr", expr)
             
             u = self.PID(0,expr*0.02)*0.5
+            
+            #print("u:",u)
 
             lPow = velSetPoint - u
             rPow = velSetPoint + u          
