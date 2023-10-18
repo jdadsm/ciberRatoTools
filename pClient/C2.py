@@ -10,9 +10,9 @@ CELLCOLS=14
 class MyRob(CRobLinkAngs):
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
-        self.h = 0.050
+        self.h = 0.008
 
-        self.Kp = 1
+        self.Kp = 0.7
         self.Ti = 1/self.h
         self.Td = 1*self.h
 
@@ -199,23 +199,31 @@ class MyRob(CRobLinkAngs):
                 return return_indexes[i]
     
     def get_middle_buffer_paths(self,buffer,exact_sensor):
-        print("in middle buffer")
         paths = []
-        middle_left_buffer = self.get_left_buffer_paths(buffer, exact_sensor)
-        middle_right_buffer = self.get_right_buffer_paths(buffer, exact_sensor)
 
-        paths.append(exact_sensor)
+        if buffer[0].count('1') >= 2:
+            paths.append(exact_sensor)
 
-        for b in buffer:
-            if b.count('1') <= len(b)-2:
-                if exact_sensor in paths:
-                    print("here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                    print(b.count("1"))
-                    print(len(b)-2)
-                    paths.remove(exact_sensor)      #there is no path forward
+        if self.is_sublist_of(buffer,[['1', '1', '1'], ['0', '1', '1']]):
+            print("here r")
+            paths.append(exact_sensor+90)
+        elif self.is_sublist_of(buffer, [['1', '1', '1'],['1', '1', '0']]):
+            print("here l")
+            paths.append(exact_sensor-90)
+
+        middle_left_buffer = self.get_left_buffer_paths(buffer[:][0:2], exact_sensor)
+        middle_right_buffer = self.get_right_buffer_paths(buffer[:][1:3], exact_sensor)
+
+        print("Extensions right: ", middle_left_buffer)
+        print("Extensions left: ", middle_right_buffer)
+
 
         paths.extend(middle_left_buffer)
         paths.extend(middle_right_buffer)
+
+        for i in range(len(paths)):
+            if paths[i] >= 180:
+                paths[i] = paths[i] - 360
 
         return paths
     
@@ -225,7 +233,7 @@ class MyRob(CRobLinkAngs):
             return paths
         if self.is_sublist_of(buffer,[['0', '0'], ['1', '1']]):
             paths.append(90+exact_sensor)
-        elif self.is_sublist_of(buffer,[['0', '0'], ['0', '1'], ['1', '1']]):
+        elif self.is_sublist_of(buffer,[['0', '0'], ['0', '1'], ['1', '1']]) or self.is_sublist_of(buffer, [['1', '1'], ['1', '0']]):
             paths.append(135+exact_sensor)
         elif self.is_sublist_of(buffer,[['1', '0'], ['1', '1'], ['0', '1']])  or self.is_sublist_of(buffer,[['1', '1'], ['0', '1']]):
             paths.append(45+exact_sensor)
@@ -242,7 +250,7 @@ class MyRob(CRobLinkAngs):
             return paths
         if self.is_sublist_of(buffer,[['0','0'],['1','1']]):
             paths.append(-90+exact_sensor)
-        elif buffer == [['0','1']]:
+        elif self.is_sublist_of(buffer,[['0', '0'], ['1', '0'], ['1', '1']]) or self.is_sublist_of(buffer, [['1', '1'], ['0', '1']]):
             paths.append(-135+exact_sensor)
         elif self.is_sublist_of(buffer,[['0', '1'], ['1', '1'], ['1', '0']]) or self.is_sublist_of(buffer,[['1', '1'], ['1', '0']]):
             paths.append(-45+exact_sensor)
@@ -299,9 +307,16 @@ class MyRob(CRobLinkAngs):
         print("m:",m)
         
         open_paths = []
-        open_paths.extend(self.get_left_buffer_paths(l,exact_sensor))
-        open_paths.extend(self.get_right_buffer_paths(r,exact_sensor))
-        open_paths.extend(self.get_middle_buffer_paths(m,exact_sensor))
+        lb = self.get_left_buffer_paths(l,exact_sensor)
+        rb = self.get_right_buffer_paths(r,exact_sensor)
+        mb = self.get_middle_buffer_paths(m,exact_sensor)
+
+        print("lb", lb)
+        print("rb", rb)
+        print("mb", mb)
+        open_paths.extend(lb)
+        open_paths.extend(rb)
+        open_paths.extend(mb)
          
         print("open_paths:",open_paths)
                    
@@ -353,8 +368,6 @@ class MyRob(CRobLinkAngs):
             sensor = self.measures.compass
             #print("Sensor:",sensor)
             
-            
-
             x = self.measures.x - pos_inicial_real[0]
             y = self.measures.y - pos_inicial_real[1]
 
@@ -409,8 +422,8 @@ class MyRob(CRobLinkAngs):
             
             
                 
-            print("alpha:",alpha + alpha_extra_laps*360)
-            print("sensor:",sensor + sensor_extra_laps*360)
+            #print("alpha:",alpha + alpha_extra_laps*360)
+            #print("sensor:",sensor + sensor_extra_laps*360)
             expr = ((sensor + sensor_extra_laps*360) - (alpha + alpha_extra_laps*360))
             #print("expr", expr)
             
