@@ -204,12 +204,19 @@ class MyRob(CRobLinkAngs):
         if buffer[0].count('1') >= 2:
             paths.append(exact_sensor)
 
+        for b in buffer:
+            if b.count('1') <= len(b)-2:
+                if exact_sensor in paths:
+                    paths.remove(exact_sensor)
+
         if self.is_sublist_of(buffer,[['1', '1', '1'], ['0', '1', '1']]):
             print("here r")
             paths.append(exact_sensor+90)
         elif self.is_sublist_of(buffer, [['1', '1', '1'],['1', '1', '0']]):
             print("here l")
             paths.append(exact_sensor-90)
+
+        
 
         middle_left_buffer = self.get_left_buffer_paths(buffer[:][0:2], exact_sensor)
         middle_right_buffer = self.get_right_buffer_paths(buffer[:][1:3], exact_sensor)
@@ -318,6 +325,9 @@ class MyRob(CRobLinkAngs):
         open_paths.extend(rb)
         open_paths.extend(mb)
          
+        #remove repeated occurences
+        open_paths = list(set(open_paths))
+
         print("open_paths:",open_paths)
                    
         return open_paths
