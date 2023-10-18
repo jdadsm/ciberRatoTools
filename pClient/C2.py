@@ -210,13 +210,10 @@ class MyRob(CRobLinkAngs):
                     paths.remove(exact_sensor)
 
         if self.is_sublist_of(buffer,[['1', '1', '1'], ['0', '1', '1']]):
-            print("here r")
             paths.append(exact_sensor+90)
         elif self.is_sublist_of(buffer, [['1', '1', '1'],['1', '1', '0']]):
-            print("here l")
             paths.append(exact_sensor-90)
 
-        
 
         middle_left_buffer = self.get_left_buffer_paths(buffer[:][0:2], exact_sensor)
         middle_right_buffer = self.get_right_buffer_paths(buffer[:][1:3], exact_sensor)
@@ -231,6 +228,8 @@ class MyRob(CRobLinkAngs):
         for i in range(len(paths)):
             if paths[i] >= 180:
                 paths[i] = paths[i] - 360
+            if paths[i] <-180:
+                paths[i] = paths[i] + 360
 
         return paths
     
@@ -240,14 +239,16 @@ class MyRob(CRobLinkAngs):
             return paths
         if self.is_sublist_of(buffer,[['0', '0'], ['1', '1']]):
             paths.append(90+exact_sensor)
-        elif self.is_sublist_of(buffer,[['0', '0'], ['0', '1'], ['1', '1']]) or self.is_sublist_of(buffer, [['1', '1'], ['1', '0']]):
+        if self.is_sublist_of(buffer,[['0', '0'], ['0', '1'], ['1', '1']]) or self.is_sublist_of(buffer, [['1', '1'], ['1', '0']]):
             paths.append(135+exact_sensor)
-        elif self.is_sublist_of(buffer,[['1', '0'], ['1', '1'], ['0', '1']])  or self.is_sublist_of(buffer,[['1', '1'], ['0', '1']]):
+        if self.is_sublist_of(buffer,[['1', '0'], ['1', '1'], ['0', '1']])  or self.is_sublist_of(buffer,[['1', '1'], ['0', '1']]):
             paths.append(45+exact_sensor)
         
         for i in range(len(paths)):
             if paths[i] >= 180:
                 paths[i] = paths[i] - 360
+            if paths[i] <-180:
+                paths[i] = paths[i] + 360
         
         return paths
     
@@ -257,9 +258,9 @@ class MyRob(CRobLinkAngs):
             return paths
         if self.is_sublist_of(buffer,[['0','0'],['1','1']]):
             paths.append(-90+exact_sensor)
-        elif self.is_sublist_of(buffer,[['0', '0'], ['1', '0'], ['1', '1']]) or self.is_sublist_of(buffer, [['1', '1'], ['0', '1']]):
+        if self.is_sublist_of(buffer,[['0', '0'], ['1', '0'], ['1', '1']]) or self.is_sublist_of(buffer, [['1', '1'], ['0', '1']]):
             paths.append(-135+exact_sensor)
-        elif self.is_sublist_of(buffer,[['0', '1'], ['1', '1'], ['1', '0']]) or self.is_sublist_of(buffer,[['1', '1'], ['1', '0']]):
+        if self.is_sublist_of(buffer,[['0', '1'], ['1', '1'], ['1', '0']]) or self.is_sublist_of(buffer,[['1', '1'], ['1', '0']]):
             paths.append(-45+exact_sensor)
         
         for i in range(len(paths)):
@@ -273,7 +274,6 @@ class MyRob(CRobLinkAngs):
         #print("is sublist? ",any(sublist == _list[i:i+len(sublist)] for i in range(len(_list))))
         return any(sublist == _list[i:i+len(sublist)] for i in range(len(_list)))
 
-    
     def remove_until_different(self,buffer):
         to_be_removed = buffer[-1]
         while buffer:
@@ -332,6 +332,18 @@ class MyRob(CRobLinkAngs):
                    
         return open_paths
 
+    def check_out_of_line(self, buffer):
+        """
+            this checks if the buffer is filled only with 0s
+            useful for checking if the robot is outside the lines
+            returns True (outside lines) or False (still in line)
+        """
+        buffer_ = self.simplify_buffer(buffer)
+        if len(buffer_) == 1:
+            if buffer_[0] == ["0","0","0","0","0","0","0"]:
+                return True
+        return False
+
     def run(self):
 
         if self.status != 0:
@@ -352,7 +364,7 @@ class MyRob(CRobLinkAngs):
         for i in range(BUFFER_SIZE):
             buffer.append(BUFFER_DEFAULT)
             
-        velSetPoint = 0.08
+        velSetPoint = 0.07
         
         sensor = self.measures.compass
         exact_sensor = self.get_exact_sensor_value(sensor)
@@ -387,13 +399,12 @@ class MyRob(CRobLinkAngs):
             if abs(x-goal[0]) <= 0.15 and abs(y-goal[1]) <= 0.15:
                 #print("Exact sensor value:", self.get_exact_sensor_value(sensor))
                 if (round(x),round(y)) not in intersections:
-                    intersections[(round(x),round(y))] = set()
-                
-                    open_paths = self.get_open_paths_for_intersection(buffer,x,y,self.get_exact_sensor_value(sensor))
-                    
-                    for path in open_paths:
-                        if path not in intersections[(round(x),round(y))]:
-                            intersections[(round(x),round(y))].add(path)
+                    intersections.setdefault((round(x), round(y)), set())
+
+                    #open paths e uma lista sem items repetidos
+                    open_paths = self.get_open_paths_for_intersection(buffer, x, y, self.get_exact_sensor_value(sensor))
+
+                    intersections[(round(x), round(y))].update(open_paths)
                     
                     print("intersections:",intersections)
                     
@@ -403,13 +414,17 @@ class MyRob(CRobLinkAngs):
                     else:                                   # if not go back
                         # MUDAR QUANDO CONSEGUIRMOS DIFERENCIAR ENTRE TER UMA INTERSEÇÃO TOTALMENTE EXPLORADA E UM DEADEND 
                         self.last_goal,goal = goal,self.last_goal
+                else:
+                    if intersections[(round(x),round(y))]:
+                        self.last_goal = goal
+                        goal = self.get_next_goal(intersections[(round(x),round(y))].pop(),goal[0],goal[1]) 
+                    else:
+                        #logica p proxima cena
+                        pass
+                self.outside = False
 
-            elif abs(x-goal[0]) <= 0.3 and abs(y-goal[1]) <= 0.3:           #esta se a aproximar, nao vale a pena usar PID que oscila demasiado
-                #print("start slowing down")
+            elif abs(x-goal[0]) <= 0.3 and abs(y-goal[1]) <= 0.3:           #esta se a aproximar, nao vale a pena usar PID que oscila demasiado, vai so a direito
                 self.driveMotors(0.04, 0.04)
-            else:
-                pass
-                #print(sensor)
                     
             #print("goal:",goal)
             #print("xy:",[x,y])
@@ -418,6 +433,7 @@ class MyRob(CRobLinkAngs):
             alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
             #print("pre alpha:",alpha)
             
+            #PID 180/-180 problem resolution
             if abs(sensor-last_sensor) > 180:
                 if sensor > 0:
                     sensor_extra_laps-=1
@@ -431,7 +447,6 @@ class MyRob(CRobLinkAngs):
                     alpha_extra_laps+=1
             
             
-                
             #print("alpha:",alpha + alpha_extra_laps*360)
             #print("sensor:",sensor + sensor_extra_laps*360)
             expr = ((sensor + sensor_extra_laps*360) - (alpha + alpha_extra_laps*360))
@@ -448,6 +463,15 @@ class MyRob(CRobLinkAngs):
 
             buffer = buffer[0:BUFFER_SIZE]
             buffer = [line] + buffer
+
+            if self.check_out_of_line(buffer):
+                if not self.outside:
+                    self.outside = True
+                    #this is true when the robot is outside the lines
+                    if intersections[(self.last_goal[0], self.last_goal[1])]: #this is redudant
+                        #the intersection is already pop'd
+                        goal = self.last_goal
+
             
             last_sensor = sensor
             last_alpha = alpha
