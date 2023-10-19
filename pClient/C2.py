@@ -347,7 +347,7 @@ class MyRob(CRobLinkAngs):
     def get_distance(self,c1,c2):
         return round( ( ((c1[0]-c2[0])**2) + ((c1[1]-c2[1])**2) )**(1/2), 2)
     
-    def dijkstra(self,graph, start, end):
+    def dijkstra(self, graph, start, end):
         unvisited = set(graph.keys())
         distances = {node: float('inf') for node in unvisited}
         distances[start] = 0
@@ -366,18 +366,49 @@ class MyRob(CRobLinkAngs):
                 if potential < distances[neighbor]:
                     distances[neighbor] = potential
                     path[neighbor] = current_node
-
+            
         if end not in path:
             return "No path found"
 
         shortest_path = []
+
         while end != start:
             shortest_path.append(end)
             end = path[end]
+        
+        weight = distances[end]
+            
         shortest_path.append(start)
 
-        return shortest_path[::-1]
+        return shortest_path[::-1], weight
 
+    def minimun_weight_path(self, intersections, graph, x, y):
+        print("\n\nNO MORE PATHS:")
+        print("intersections:",intersections)
+        temp_length = 99999
+        possible_path = None
+        for end_node, intersection_set in intersections.items():
+            if intersection_set:
+                print("set:",intersection_set)
+                print("end node:",end_node)
+                print("now: ", (round(x),round(y)))
+                p, peso = self.dijkstra(graph,(round(x),round(y)),end_node)
+                if p == "No path found":
+                    print(p)
+                    return None
+                if peso < temp_length:
+                    temp_length =  peso
+                    possible_path = p
+
+        print("possible path", possible_path)
+        if possible_path is None:
+            self.driveMotors(0.0,0.0)
+            print("we should exit now")
+            exit(0)
+        goal = possible_path[1]
+        self.last_goal = goal
+        
+        return goal
 
     def run(self):
 
@@ -393,7 +424,7 @@ class MyRob(CRobLinkAngs):
 
         ZEROS = ["0","0","0","0","0","0","0"]
         BUFFER_DEFAULT = ["0","0","1","1","1","0","0"]      
-        BUFFER_SIZE = 7
+        BUFFER_SIZE = 5
         buffer = []
         
         for i in range(BUFFER_SIZE):
@@ -422,6 +453,8 @@ class MyRob(CRobLinkAngs):
         sensor_extra_laps = 0
         
         last_coords = (0,0)
+        
+        backtracking = False
             
         while True:
             self.readSensors()
@@ -437,6 +470,35 @@ class MyRob(CRobLinkAngs):
             #print("orientation:",orientation_string)
             
             if abs(x-goal[0]) <= 0.15 and abs(y-goal[1]) <= 0.15:
+
+                if (round(x),round(y)) in graph:
+                    weight = self.get_distance((round(x),round(y)),last_coords)
+                    if weight > 0:
+                        graph[(round(x),round(y))][last_coords] = weight
+                    if last_coords not in graph:
+                        graph[last_coords] = {}
+                    weight = self.get_distance(last_coords,(round(x),round(y)))
+                    if weight > 0:
+                        graph[last_coords][(round(x),round(y))] = weight
+                    
+                else:
+                    if last_coords:
+                        graph[(round(x),round(y))] = {}
+                        weight = self.get_distance((round(x),round(y)),last_coords)
+                        if weight > 0:                            
+                            graph[(round(x),round(y))][last_coords] = weight
+                        if last_coords not in graph:
+                            graph[last_coords] = {}
+                        weight = self.get_distance(last_coords,(round(x),round(y)))
+                        if weight > 0:
+                            graph[last_coords][(round(x),round(y))] = weight
+                
+                    print("\nGraph:")
+                    for node, connections in graph.items():
+                        print(f"{node} - Connections:")
+                        for neighbor, weight in connections.items():
+                            print(f"  -> {neighbor} (Weight: {weight})")   
+
                 #print("Exact sensor value:", self.get_exact_sensor_value(sensor))
                 if (round(x),round(y)) not in intersections:
                     intersections.setdefault((round(x), round(y)), set())
@@ -459,62 +521,21 @@ class MyRob(CRobLinkAngs):
                         self.last_goal = goal
                         goal = self.get_next_goal(intersections[(round(x),round(y))].pop(),goal[0],goal[1]) 
                     else:
-                        print("\n\nNO MORE PATHS:")
-                        print("intersections:",intersections)
-                        temp_length = 99999
-                        possible_path = None
-                        for end_node, intersection_set in intersections.items():
-                            if intersection_set:
-                                print("set:",intersection_set)
-                                p = self.dijkstra(graph,(round(x),round(y)),end_node)
-                                if p == "No path found":
-                                    print(p)
-                                    continue
-                                if len(p) < temp_length:
-                                    temp_length =  len(self.dijkstra(graph,(round(x),round(y)),end_node))
-                                    possible_path = self.dijkstra(graph,(round(x),round(y)),end_node)
-                                    print("possible path:",possible_path)
-                        self.last_goal = goal
-                        if possible_path is None:
-                            exit(0)
-                        goal = possible_path[1]
+                        if not backtracking:
+                            goal = self.minimun_weight_path(intersections, graph, x, y)
+                            if goal == None:
+                                continue
+
                             
                 self.outside = False
-                
-                if line != ZEROS:
-                    if (round(x),round(y)) in graph:
-                        weight = self.get_distance((round(x),round(y)),last_coords)
-                        if weight > 0:
-                            graph[(round(x),round(y))][last_coords] = weight
-                        if last_coords not in graph:
-                            graph[last_coords] = {}
-                        weight = self.get_distance(last_coords,(round(x),round(y)))
-                        if weight > 0:
-                            graph[last_coords][(round(x),round(y))] = weight
-                        
-                    else:
-                        if last_coords:
-                            graph[(round(x),round(y))] = {}
-                            weight = self.get_distance((round(x),round(y)),last_coords)
-                            if weight > 0:                            
-                                graph[(round(x),round(y))][last_coords] = weight
-                            if last_coords not in graph:
-                                graph[last_coords] = {}
-                            weight = self.get_distance(last_coords,(round(x),round(y)))
-                            if weight > 0:
-                                graph[last_coords][(round(x),round(y))] = weight
-                
-                    print("\nGraph:")
-                    for node, connections in graph.items():
-                        print(f"{node} - Connections:")
-                        for neighbor, weight in connections.items():
-                            print(f"  -> {neighbor} (Weight: {weight})")   
-                    
-                    last_coords = (round(x),round(y))
+                last_coords = (round(x),round(y))
                     
             #print("goal:",goal)
             #print("xy:",[x,y])
             
+            if backtracking:
+                if abs(x-goal[0]) <= 0.15 and abs(y-goal[1]) <= 0.15:
+                    backtracking = False                                    #we reached our destination, no more backtracking
             
             alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
             #print("pre alpha:",alpha)
@@ -532,15 +553,9 @@ class MyRob(CRobLinkAngs):
                 else:
                     alpha_extra_laps+=1
             
-            
-            #print("alpha:",alpha + alpha_extra_laps*360)
-            #print("sensor:",sensor + sensor_extra_laps*360)
             expr = ((sensor + sensor_extra_laps*360) - (alpha + alpha_extra_laps*360))
-            #print("expr", expr)
             
             u = self.PID(0,expr*0.02)*0.5
-            
-            #print("u:",u)
 
             lPow = velSetPoint - u
             rPow = velSetPoint + u          
@@ -557,12 +572,13 @@ class MyRob(CRobLinkAngs):
                     if intersections[(self.last_goal[0], self.last_goal[1])]: #this is redudant
                         #the intersection is already pop'd
                         goal = self.last_goal
+                        last_coords = (self.last_goal[0], self.last_goal[1])
             
             last_sensor = sensor
             last_alpha = alpha
             
             #aqui vemos ja passamos por certos locais
-            if line.count('1') >= 2:
+            if line != ZEROS:
                 if (orientation_string != "-" and orientation_string != "|"):
                     if(round(x)%2 == 1 and round(y)%2 == 1):
                         self.put_in_map(round(x), round(y), orientation_string)
