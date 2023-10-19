@@ -371,14 +371,20 @@ class MyRob(CRobLinkAngs):
             return "No path found"
 
         shortest_path = []
+        weight
 
         while end != start:
             shortest_path.append(end)
             end = path[end]
-        
-        weight = distances[end]
+
+        print("weight ", weight)
             
         shortest_path.append(start)
+        weight = 0
+
+        for tuple in shortest_path:
+            if tuple in distances.keys():
+                weight += distances[tuple]
 
         return shortest_path[::-1], weight
 
@@ -393,6 +399,8 @@ class MyRob(CRobLinkAngs):
                 print("end node:",end_node)
                 print("now: ", (round(x),round(y)))
                 p, peso = self.dijkstra(graph,(round(x),round(y)),end_node)
+                print("path", p)
+                print("weight", peso)
                 if p == "No path found":
                     print(p)
                     return None
@@ -424,13 +432,13 @@ class MyRob(CRobLinkAngs):
 
         ZEROS = ["0","0","0","0","0","0","0"]
         BUFFER_DEFAULT = ["0","0","1","1","1","0","0"]      
-        BUFFER_SIZE = 5
+        BUFFER_SIZE = 9
         buffer = []
         
         for i in range(BUFFER_SIZE):
             buffer.append(BUFFER_DEFAULT)
             
-        velSetPoint = 0.07
+        velSetPoint = 0.08
         
         sensor = self.measures.compass
         exact_sensor = self.get_exact_sensor_value(sensor)
@@ -471,6 +479,8 @@ class MyRob(CRobLinkAngs):
             
             if abs(x-goal[0]) <= 0.15 and abs(y-goal[1]) <= 0.15:
 
+                self.outside = False
+
                 if (round(x),round(y)) in graph:
                     weight = self.get_distance((round(x),round(y)),last_coords)
                     if weight > 0:
@@ -497,7 +507,7 @@ class MyRob(CRobLinkAngs):
                     for node, connections in graph.items():
                         print(f"{node} - Connections:")
                         for neighbor, weight in connections.items():
-                            print(f"  -> {neighbor} (Weight: {weight})")   
+                            print(f"  -> {neighbor} (Weight: {weight})")
 
                 #print("Exact sensor value:", self.get_exact_sensor_value(sensor))
                 if (round(x),round(y)) not in intersections:
@@ -526,8 +536,6 @@ class MyRob(CRobLinkAngs):
                             if goal == None:
                                 continue
 
-                            
-                self.outside = False
                 last_coords = (round(x),round(y))
                     
             #print("goal:",goal)
@@ -567,18 +575,18 @@ class MyRob(CRobLinkAngs):
 
             if self.check_out_of_line(buffer):
                 if not self.outside:
+                    
+                    #if self.get_exact_sensor_value(sensor) in [135, 45, -135, -45] and line==ZEROS:     #intersecao de 45o
                     self.outside = True
-                    #this is true when the robot is outside the lines
-                    if intersections[(self.last_goal[0], self.last_goal[1])]: #this is redudant
-                        #the intersection is already pop'd
-                        goal = self.last_goal
-                        last_coords = (self.last_goal[0], self.last_goal[1])
+                    goal = self.last_goal
+                    last_coords = (self.last_goal[0], self.last_goal[1])
+                    #else:                                                                               #intersecao de 90o
             
             last_sensor = sensor
             last_alpha = alpha
             
             #aqui vemos ja passamos por certos locais
-            if line != ZEROS:
+            if line[2:5].count("1") >= 2:
                 if (orientation_string != "-" and orientation_string != "|"):
                     if(round(x)%2 == 1 and round(y)%2 == 1):
                         self.put_in_map(round(x), round(y), orientation_string)
