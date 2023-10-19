@@ -218,8 +218,8 @@ class MyRob(CRobLinkAngs):
         middle_left_buffer = self.get_left_buffer_paths(buffer[:][0:2], exact_sensor)
         middle_right_buffer = self.get_right_buffer_paths(buffer[:][1:3], exact_sensor)
 
-        print("Extensions right: ", middle_left_buffer)
-        print("Extensions left: ", middle_right_buffer)
+        #print("Extensions right: ", middle_left_buffer)
+        #print("Extensions left: ", middle_right_buffer)
 
 
         paths.extend(middle_left_buffer)
@@ -291,7 +291,7 @@ class MyRob(CRobLinkAngs):
         return simplified_buffer
             
     def get_open_paths_for_intersection(self,buffer,x,y,exact_sensor):
-        print("exact_sensor:",exact_sensor)
+        #print("exact_sensor:",exact_sensor)
         left_buffer = []
         right_buffer = []
         middle_buffer = []
@@ -301,26 +301,26 @@ class MyRob(CRobLinkAngs):
             right_buffer.append(line[5:])
             middle_buffer.append(line[2:5])
             
-        print("left_buffer:",left_buffer)
-        print("right_buffer:",right_buffer)
-        print("middle_buffer:",middle_buffer)
+        #print("left_buffer:",left_buffer)
+        #print("right_buffer:",right_buffer)
+        #print("middle_buffer:",middle_buffer)
         
         l = self.simplify_buffer(left_buffer)
         r = self.simplify_buffer(right_buffer)
         m = self.simplify_buffer(middle_buffer)
         
-        print("l:",l)
-        print("r:",r)
-        print("m:",m)
+        #print("l:",l)
+        #print("r:",r)
+        #print("m:",m)
         
         open_paths = []
         lb = self.get_left_buffer_paths(l,exact_sensor)
         rb = self.get_right_buffer_paths(r,exact_sensor)
         mb = self.get_middle_buffer_paths(m,exact_sensor)
 
-        print("lb", lb)
-        print("rb", rb)
-        print("mb", mb)
+        #print("lb", lb)
+        #print("rb", rb)
+        #print("mb", mb)
         open_paths.extend(lb)
         open_paths.extend(rb)
         open_paths.extend(mb)
@@ -328,7 +328,7 @@ class MyRob(CRobLinkAngs):
         #remove repeated occurences
         open_paths = list(set(open_paths))
 
-        print("open_paths:",open_paths)
+        #print("open_paths:",open_paths)
                    
         return open_paths
 
@@ -343,6 +343,41 @@ class MyRob(CRobLinkAngs):
             if buffer_[0] == ["0","0","0","0","0","0","0"]:
                 return True
         return False
+    
+    def get_distance(self,c1,c2):
+        return round( ( ((c1[0]-c2[0])**2) + ((c1[1]-c2[1])**2) )**(1/2), 2)
+    
+    def dijkstra(self,graph, start, end):
+        unvisited = set(graph.keys())
+        distances = {node: float('inf') for node in unvisited}
+        distances[start] = 0
+        path = {}
+
+        while unvisited:
+            current_node = min(unvisited, key=lambda node: distances[node])
+
+            if distances[current_node] == float('inf'):
+                break
+
+            unvisited.remove(current_node)
+
+            for neighbor, weight in graph[current_node].items():
+                potential = distances[current_node] + weight
+                if potential < distances[neighbor]:
+                    distances[neighbor] = potential
+                    path[neighbor] = current_node
+
+        if end not in path:
+            return "No path found"
+
+        shortest_path = []
+        while end != start:
+            shortest_path.append(end)
+            end = path[end]
+        shortest_path.append(start)
+
+        return shortest_path[::-1]
+
 
     def run(self):
 
@@ -380,8 +415,13 @@ class MyRob(CRobLinkAngs):
         #keys = (x,y) values = open_paths
         intersections = {}
         
+        #keys = (x,y) values = all_paths
+        graph = {}
+        
         alpha_extra_laps = 0
         sensor_extra_laps = 0
+        
+        last_coords = (0,0)
             
         while True:
             self.readSensors()
@@ -419,12 +459,58 @@ class MyRob(CRobLinkAngs):
                         self.last_goal = goal
                         goal = self.get_next_goal(intersections[(round(x),round(y))].pop(),goal[0],goal[1]) 
                     else:
-                        #logica p proxima cena
-                        pass
+                        print("\n\nNO MORE PATHS:")
+                        print("intersections:",intersections)
+                        temp_length = 99999
+                        possible_path = None
+                        for end_node, intersection_set in intersections.items():
+                            if intersection_set:
+                                print("set:",intersection_set)
+                                p = self.dijkstra(graph,(round(x),round(y)),end_node)
+                                if p == "No path found":
+                                    print(p)
+                                    continue
+                                if len(p) < temp_length:
+                                    temp_length =  len(self.dijkstra(graph,(round(x),round(y)),end_node))
+                                    possible_path = self.dijkstra(graph,(round(x),round(y)),end_node)
+                                    print("possible path:",possible_path)
+                        self.last_goal = goal
+                        if possible_path is None:
+                            exit(0)
+                        goal = possible_path[1]
+                            
                 self.outside = False
-
-            elif abs(x-goal[0]) <= 0.3 and abs(y-goal[1]) <= 0.3:           #esta se a aproximar, nao vale a pena usar PID que oscila demasiado, vai so a direito
-                self.driveMotors(0.04, 0.04)
+                
+                if line != ZEROS:
+                    if (round(x),round(y)) in graph:
+                        weight = self.get_distance((round(x),round(y)),last_coords)
+                        if weight > 0:
+                            graph[(round(x),round(y))][last_coords] = weight
+                        if last_coords not in graph:
+                            graph[last_coords] = {}
+                        weight = self.get_distance(last_coords,(round(x),round(y)))
+                        if weight > 0:
+                            graph[last_coords][(round(x),round(y))] = weight
+                        
+                    else:
+                        if last_coords:
+                            graph[(round(x),round(y))] = {}
+                            weight = self.get_distance((round(x),round(y)),last_coords)
+                            if weight > 0:                            
+                                graph[(round(x),round(y))][last_coords] = weight
+                            if last_coords not in graph:
+                                graph[last_coords] = {}
+                            weight = self.get_distance(last_coords,(round(x),round(y)))
+                            if weight > 0:
+                                graph[last_coords][(round(x),round(y))] = weight
+                
+                    print("\nGraph:")
+                    for node, connections in graph.items():
+                        print(f"{node} - Connections:")
+                        for neighbor, weight in connections.items():
+                            print(f"  -> {neighbor} (Weight: {weight})")   
+                    
+                    last_coords = (round(x),round(y))
                     
             #print("goal:",goal)
             #print("xy:",[x,y])
@@ -477,14 +563,15 @@ class MyRob(CRobLinkAngs):
             last_alpha = alpha
             
             #aqui vemos ja passamos por certos locais
-            if (orientation_string != "-" and orientation_string != "|"):
-                if(round(x)%2 == 1 and round(y)%2 == 1):
-                    self.put_in_map(round(x), round(y), orientation_string)
-                    self.print_map_to_file()
-            else:
-                if (round(x)%2 == 1 or round(y)%2 == 1):
-                    self.put_in_map(round(x), round(y), orientation_string)
-                    self.print_map_to_file()
+            if line.count('1') >= 2:
+                if (orientation_string != "-" and orientation_string != "|"):
+                    if(round(x)%2 == 1 and round(y)%2 == 1):
+                        self.put_in_map(round(x), round(y), orientation_string)
+                        self.print_map_to_file()
+                else:
+                    if (round(x)%2 == 1 or round(y)%2 == 1):
+                        self.put_in_map(round(x), round(y), orientation_string)
+                        self.print_map_to_file()
 
             
 class Map():
