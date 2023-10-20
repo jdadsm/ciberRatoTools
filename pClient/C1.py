@@ -13,9 +13,9 @@ class MyRob(CRobLinkAngs):
     
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
-        self.h = 0.0085
+        self.h = 0.05
 
-        self.Kp = 1
+        self.Kp = 0.7
         self.Ti = 1/self.h
         self.Td = 1*self.h
 

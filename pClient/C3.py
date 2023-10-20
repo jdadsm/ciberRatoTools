@@ -3,6 +3,7 @@ import sys
 from croblink import *
 import math
 import xml.etree.ElementTree as ET
+from itertools import combinations
 
 CELLROWS=7
 CELLCOLS=14
@@ -461,6 +462,11 @@ class MyRob(CRobLinkAngs):
         
         last_coords = (0,0)
         
+        beacons = [(0,0)]
+        
+        for i in range(int(self.nBeacons)-1):
+            beacons.append(None)
+        
         backtracking = False
             
         while True:
@@ -475,6 +481,12 @@ class MyRob(CRobLinkAngs):
 
             orientation_string = self.get_orientation_string(sensor)
             #print("orientation:",orientation_string)
+            
+            if self.measures.ground != -1:
+                beacons[self.measures.ground] = (round(x),round(y))
+                print("beacons:",beacons)
+                print("beacon",self.measures.ground)
+                
             
             if abs(x-goal[0]) <= 0.15 and abs(y-goal[1]) <= 0.15:
 
@@ -522,7 +534,7 @@ class MyRob(CRobLinkAngs):
                     if intersections[(round(x),round(y))]:  # if there are still open paths in this intersection, choose one and explore it
                         self.last_goal = goal
                         goal = self.get_next_goal(intersections[(round(x),round(y))].pop(),goal[0],goal[1]) 
-                    else:                                   # if not go back
+                    else:                                   # if not go back 
                         self.last_goal,goal = goal,self.last_goal
                 else:
                     if intersections[(round(x),round(y))]:
@@ -535,6 +547,41 @@ class MyRob(CRobLinkAngs):
                                 continue
 
                 last_coords = (round(x),round(y))
+                
+            if None not in beacons:
+                print(beacons)
+                cost = None
+                solution = None
+                #func to add beacon to graph
+                for combination in combinations(beacons[1:],len(beacons)-1):
+                    print("combination:",combination)
+                    temp = []
+                    temp.append((0,0))
+                    temp.extend(combination)
+                    temp.append((0,0))
+                    print("temp:",temp)
+                    possible_solution = []
+                    for i in range(len(temp)-1):
+                        possible_solution += self.dijkstra(graph,temp[i],temp[i+1])[0]
+                        print("test:",possible_solution)
+                        #print(temp[i])
+                        #print(temp[i+1])
+                    if cost is None:
+                        cost = len(possible_solution)
+                        solution = possible_solution
+                    else:
+                        if len(possible_solution) < cost:
+                            cost = len(possible_solution)
+                            solution = possible_solution
+                            
+                print("Solution:",solution)
+                        
+                    
+                        
+                        
+                self.driveMotors(0.0,0.0)
+                exit(0)
+            
                     
             #print("goal:",goal)
             #print("xy:",[x,y])
