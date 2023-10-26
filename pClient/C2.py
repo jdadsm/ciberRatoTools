@@ -13,8 +13,8 @@ class MyRob(CRobLinkAngs):
         self.h = 0.005
 
         self.Kp = 0.5
-        self.Ti = 60
-        self.Td = 0.0006
+        self.Ti = 1/self.h
+        self.Td = 1*self.h
 
         self.e_m1 = 0
         self.e_m2 = 0
@@ -56,7 +56,7 @@ class MyRob(CRobLinkAngs):
         for i in range(BUFFER_SIZE):
             buffer.append(BUFFER_DEFAULT)
             
-        velSetPoint = 0.11
+        velSetPoint = 0.1
         
         sensor = self.measures.compass
         exact_sensor = self.get_exact_sensor_value(sensor)
@@ -95,7 +95,7 @@ class MyRob(CRobLinkAngs):
             orientation_string = self.get_orientation_string(sensor)
             #print("orientation:",orientation_string)
             
-            if abs(x-goal[0]) <= 0.17 and abs(y-goal[1]) <= 0.17:
+            if abs(x-goal[0]) <= 0.15 and abs(y-goal[1]) <= 0.15:
 
                 if self.estado == "backtrack":
                     self.estado = "explore"
@@ -225,7 +225,7 @@ class MyRob(CRobLinkAngs):
         K0 = self.Kp*(1+self.h/self.Ti+self.Td/self.h)
         K1 = -self.Kp*(1+2*self.Td/self.h)
         K2 = self.Kp*self.Td/self.h
-
+        
         e = r-y
         
         u = self.u_m1 + K0*e + K1*self.e_m1 + K2*self.e_m2
