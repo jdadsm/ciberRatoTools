@@ -10,11 +10,11 @@ CELLCOLS=14
 class MyRob(CRobLinkAngs):
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
-        self.h = 0.008
+        self.h = 0.005
 
-        self.Kp = 0.7
-        self.Ti = 1/self.h
-        self.Td = 1*self.h
+        self.Kp = 0.5
+        self.Ti = 60
+        self.Td = 0.0006
 
         self.e_m1 = 0
         self.e_m2 = 0
@@ -50,13 +50,13 @@ class MyRob(CRobLinkAngs):
 
         ZEROS = ["0","0","0","0","0","0","0"]
         BUFFER_DEFAULT = ["0","0","1","1","1","0","0"]      
-        BUFFER_SIZE = 9
+        BUFFER_SIZE = 7
         buffer = []
         
         for i in range(BUFFER_SIZE):
             buffer.append(BUFFER_DEFAULT)
             
-        velSetPoint = 0.1
+        velSetPoint = 0.11
         
         sensor = self.measures.compass
         exact_sensor = self.get_exact_sensor_value(sensor)
@@ -95,7 +95,7 @@ class MyRob(CRobLinkAngs):
             orientation_string = self.get_orientation_string(sensor)
             #print("orientation:",orientation_string)
             
-            if abs(x-goal[0]) <= 0.1 and abs(y-goal[1]) <= 0.1:
+            if abs(x-goal[0]) <= 0.17 and abs(y-goal[1]) <= 0.17:
 
                 if self.estado == "backtrack":
                     self.estado = "explore"
@@ -122,11 +122,11 @@ class MyRob(CRobLinkAngs):
                         if weight > 0:
                             graph[last_coords][(round(x),round(y))] = weight
                 
-                    print("\nGraph:")
+                    """ print("\nGraph:")
                     for node, connections in graph.items():
                         print(f"{node} - Connections:")
                         for neighbor, weight in connections.items():
-                            print(f"  -> {neighbor} (Weight: {weight})")
+                            print(f"  -> {neighbor} (Weight: {weight})") """
 
                 #print("Exact sensor value:", self.get_exact_sensor_value(sensor))
                 if (round(x),round(y)) not in intersections:
@@ -177,14 +177,12 @@ class MyRob(CRobLinkAngs):
             
             expr = ((sensor + sensor_extra_laps*360) - (alpha + alpha_extra_laps*360))
 
-            print("expr ", expr)
-            if abs(expr)>5:
-                print("here")
+            if abs(expr)>3:
                 self.estado = "rotate"
             else:
                 self.estado = "explore"
             
-            u = self.PID(0,expr*0.02)*0.5
+            u = self.PID(0,expr*0.02)*0.4
 
             lPow = velSetPoint - u
             rPow = velSetPoint + u
@@ -198,11 +196,10 @@ class MyRob(CRobLinkAngs):
             buffer = buffer[0:BUFFER_SIZE]
             buffer = [line] + buffer
 
-            print(buffer[2:8])
-            if self.check_out_of_line(buffer[2:8]) and self.estado=="explore":
-                    self.estado = "backtrack"
-                    goal = self.last_goal
-                    last_coords = (self.last_goal[0], self.last_goal[1])                                                                           #intersecao de 90o
+            if self.check_out_of_line(buffer[0:4]) and self.estado=="explore":
+                self.estado = "backtrack"
+                goal = self.last_goal
+                last_coords = (self.last_goal[0], self.last_goal[1])                                                                           #intersecao de 90o
             
             last_sensor = sensor
             last_alpha = alpha
@@ -228,7 +225,7 @@ class MyRob(CRobLinkAngs):
         K0 = self.Kp*(1+self.h/self.Ti+self.Td/self.h)
         K1 = -self.Kp*(1+2*self.Td/self.h)
         K2 = self.Kp*self.Td/self.h
-        
+
         e = r-y
         
         u = self.u_m1 + K0*e + K1*self.e_m1 + K2*self.e_m2
@@ -596,7 +593,8 @@ class MyRob(CRobLinkAngs):
         if possible_path is None:
             self.driveMotors(0.0,0.0)
             print("we should exit now")
-            exit(0)
+            self.finish()
+            exit()
         goal = possible_path[1]
         self.last_goal = goal
         
