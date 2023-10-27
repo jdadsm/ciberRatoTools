@@ -3,7 +3,7 @@ import sys
 from croblink import *
 import math
 import xml.etree.ElementTree as ET
-from itertools import combinations
+from itertools import permutations
 
 CELLROWS=7
 CELLCOLS=14
@@ -11,9 +11,9 @@ CELLCOLS=14
 class MyRob(CRobLinkAngs):
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
-        self.h = 0.008
+        self.h = 0.005
 
-        self.Kp = 0.7
+        self.Kp = 0.5
         self.Ti = 1/self.h
         self.Td = 1*self.h
 
@@ -23,20 +23,265 @@ class MyRob(CRobLinkAngs):
 
         self.max_u = 40
 
+        # states of the robot:
+        # ["explore", "backtrack", "rotate"]
+        self.estado = "explore"
+        
+        self.finishing = False # Used to return to (0,0)
+
         #list of intersections
         self.vertices = []
 
         #ultimo goal 
         self.last_goal = [0,0]
 
-        #outside?
-        self.outside = False
-
         #ultima orientacao
         self.last_orientation = 0
 
+
+    def run(self):
+
+        if self.status != 0:
+            print("Connection refused or error")
+            quit()
+
+        self.initialize_map()
+
+        #posicao inical do carro -> I
+        self.readSensors()
+        pos_inicial_real = [self.measures.x, self.measures.y]
+
+        ZEROS = ["0","0","0","0","0","0","0"]
+        BUFFER_DEFAULT = ["0","0","1","1","1","0","0"]      
+        BUFFER_SIZE = 7
+        buffer = []
+        
+        for i in range(BUFFER_SIZE):
+            buffer.append(BUFFER_DEFAULT)
+            
+        velSetPoint = 0.1
+        
+        sensor = self.measures.compass
+        exact_sensor = self.get_exact_sensor_value(sensor)
+        #print(exact_sensor)
+        
+        alpha = sensor
+        
+        last_sensor = 0
+        last_alpha = 0
+        
+        goal = self.get_next_goal(exact_sensor, 0, 0)
+        
+        #keys = (x,y) values = open_paths
+        intersections = {}
+        
+        #keys = (x,y) values = all_paths
+        graph = {}
+        
+        alpha_extra_laps = 0
+        sensor_extra_laps = 0
+        
+        last_coords = (0,0)
+        
+        backtracking = False
+        
+        beacons = [(0,0)]
+        
+        for i in range(int(self.nBeacons)-1):
+            beacons.append(None)
+            
+        while True:
+            self.readSensors()
+            
+            line = self.measures.lineSensor
+            sensor = self.measures.compass
+            #print("Sensor:",sensor)
+            
+            x = self.measures.x - pos_inicial_real[0]
+            y = self.measures.y - pos_inicial_real[1]
+
+            orientation_string = self.get_orientation_string(sensor)
+            #print("orientation:",orientation_string)
+            
+            if self.measures.ground != -1:
+                beacons[self.measures.ground] = (round(x),round(y))
+                print("beacons:",beacons)
+                print("beacon",self.measures.ground)
+            
+            if abs(x-goal[0]) <= 0.15 and abs(y-goal[1]) <= 0.15: 
+
+                if self.estado == "backtrack":
+                    self.estado = "explore"
+
+                self.update_graph(x,y,graph,last_coords)
+                
+                if self.finishing:
+                    if (round(x),round(y)) == (0,0):
+                        self.finish_C3(beacons,graph)
+                    goal = self.dijkstra(graph,(round(x),round(y)),(0,0))[0][1]
+                else:
+                
+                    #print("Exact sensor value:", self.get_exact_sensor_value(sensor))
+                    if (round(x),round(y)) not in intersections:
+                        intersections.setdefault((round(x), round(y)), set())
+                        #open paths e uma lista sem items repetidos
+                        open_paths = self.get_open_paths_for_intersection(buffer, x, y, self.get_exact_sensor_value(sensor))
+                        intersections[(round(x), round(y))].update(open_paths)
+                        
+                        #print("intersections:",intersections)
+                        
+                        if intersections[(round(x),round(y))]:  # if there are still open paths in this intersection, choose one and explore it
+                            self.last_goal = goal
+                            goal = self.get_next_goal(intersections[(round(x),round(y))].pop(),goal[0],goal[1]) 
+                        else:                                   # if not go back
+                            self.last_goal,goal = goal,self.last_goal
+                    else:
+                        if intersections[(round(x),round(y))]:
+                            self.last_goal = goal
+                            goal = self.get_next_goal(intersections[(round(x),round(y))].pop(),goal[0],goal[1]) 
+                        else:
+                            if not backtracking:
+                                goal = self.minimun_weight_path(intersections, graph, x, y)
+                                if goal == None:
+                                    continue
+
+                self.estado = "rotate"
+                last_coords = (round(x),round(y))
+            
+            if None not in beacons:
+                self.update_graph(x,y,graph,last_coords)
+                self.finishing = True
+                    
+            #print("goal:",goal)
+            #print("xy:",[x,y])
+
+            
+            alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
+            #print("pre alpha:",alpha)
+            
+            #PID 180/-180 problem resolution
+            if abs(sensor-last_sensor) > 180:
+                if sensor > 0:
+                    sensor_extra_laps-=1
+                else:
+                    sensor_extra_laps+=1
+            
+            if abs(alpha-last_alpha) > 180:
+                if alpha > 0:
+                    alpha_extra_laps-=1
+                else:
+                    alpha_extra_laps+=1
+            
+            expr = ((sensor + sensor_extra_laps*360) - (alpha + alpha_extra_laps*360))
+
+            if abs(expr)>3:
+                self.estado = "rotate"
+            else:
+                self.estado = "explore"
+            
+            u = self.PID(0,expr*0.02)*0.4
+
+            lPow = velSetPoint - u
+            rPow = velSetPoint + u
+
+            if self.estado == "rotate":             #impedir que siga em frente, p nao sair da linha
+                lPow = - u
+                rPow = u       
+
+            self.driveMotors(lPow,rPow)
+
+            buffer = buffer[0:BUFFER_SIZE]
+            buffer = [line] + buffer
+
+            if self.check_out_of_line(buffer[0:4]) and self.estado=="explore":
+                self.estado = "backtrack"
+                goal = self.last_goal
+                last_coords = (self.last_goal[0], self.last_goal[1])                                                                           #intersecao de 90o
+            
+            last_sensor = sensor
+            last_alpha = alpha
+            
+            #aqui vemos ja passamos por certos locais
+            if line[2:5].count("1") >= 2:
+                if (orientation_string != "-" and orientation_string != "|"):
+                    if(round(x)%2 == 1 and round(y)%2 == 1):
+                        self.put_in_map(round(x), round(y), orientation_string)
+                        self.print_map_to_file()
+                else:
+                    if (round(x)%2 == 1 or round(y)%2 == 1):
+                        self.put_in_map(round(x), round(y), orientation_string)
+                        self.print_map_to_file()
+
+
     # In this map the center of cell (i,j), (i in 0..6, j in 0..13) is mapped to labMap[i*2][j*2].
     # to know if there is a wall on top of cell(i,j) (i in 0..5), check if the value of labMap[i*2+1][j*2] is space or not
+    
+    def finish_C3(self,beacons,graph):    
+        print(beacons)
+        cost = None
+        solution = None
+        #func to add beacon to graph
+        for combination in permutations(beacons[1:],len(beacons)-1):
+            #print("combination:",combination)
+            temp = []
+            temp.append((0,0))
+            temp.extend(combination)
+            temp.append((0,0))
+            #print("temp:",temp)
+            possible_solution = []
+            for i in range(len(temp)-1):
+                if i == 0:
+                    possible_solution += self.dijkstra(graph,temp[i],temp[i+1])[0]
+                else:
+                    possible_solution += self.dijkstra(graph,temp[i],temp[i+1])[0][1:]
+                #print("test:",possible_solution)
+                #print(temp[i])
+                #print(temp[i+1])
+            if cost is None:
+                cost = len(possible_solution)
+                solution = possible_solution
+            else:
+                if len(possible_solution) < cost:
+                    cost = len(possible_solution)
+                    solution = possible_solution
+        
+        #solution.append((0,0))
+        print("Solution:",solution)
+        file = open("pathC3.path", "w")
+        for coord in solution:
+            file.write(f"{coord[0]} {coord[1]}\n")
+        self.driveMotors(0.0,0.0)
+        self.finish()
+        exit(0)
+    
+    def update_graph(self,x,y,graph,last_coords):
+        if (round(x),round(y)) in graph:        
+            weight = self.get_distance((round(x),round(y)),last_coords)
+            if weight > 0:
+                graph[(round(x),round(y))][last_coords] = weight
+            if last_coords not in graph:
+                graph[last_coords] = {}     #PROBABLY DEVIAMOS AUTALIZAR ISTO, ADICIONAR LIGACAO AO QUE TEMOS
+            weight = self.get_distance(last_coords,(round(x),round(y)))
+            if weight > 0:
+                graph[last_coords][(round(x),round(y))] = weight
+            
+        else:
+            if last_coords:                 # se houver ponto de origem e goal nao existe no no grafo
+                graph[(round(x),round(y))] = {}
+                weight = self.get_distance((round(x),round(y)),last_coords)
+                if weight > 0:                            
+                    graph[(round(x),round(y))][last_coords] = weight
+                if last_coords not in graph:
+                    graph[last_coords] = {}
+                weight = self.get_distance(last_coords,(round(x),round(y)))
+                if weight > 0:
+                    graph[last_coords][(round(x),round(y))] = weight
+        
+            print("\nGraph:")
+            for node, connections in graph.items():
+                print(f"{node} - Connections:")
+                for neighbor, weight in connections.items():
+                    print(f"  -> {neighbor} (Weight: {weight})")
     
     def PID(self,r,y):
         u = 0
@@ -176,7 +421,7 @@ class MyRob(CRobLinkAngs):
         """
         This function takes the position of the robot the sensor value of the line where he is at the moment and return the position to have as a next goal
         """
-        print("Sensor:",sensor)
+        #print("Sensor:",sensor)
         new_goal = None
         possible_new_goals = [[x+2, y],[x+2, y+2],[x, y+2],[x-2, y+2],[x-2, y],[x-2, y],[x+2, y-2],[x, y-2],[x-2, y-2]]
         sensor_values = [0,45,90,135,-180,-180,-45,-90,-135]
@@ -376,8 +621,6 @@ class MyRob(CRobLinkAngs):
         while end != start:
             shortest_path.append(end)
             end = path[end]
-
-        print("weight ", weight)
             
         shortest_path.append(start)
         weight = 0
@@ -386,260 +629,40 @@ class MyRob(CRobLinkAngs):
             if tuple in distances.keys():
                 weight += distances[tuple]
 
+        print("weight ", weight)
+        
         return shortest_path[::-1], weight
 
     def minimun_weight_path(self, intersections, graph, x, y):
         print("\n\nNO MORE PATHS:")
-        print("intersections:",intersections)
+        #print("intersections:",intersections)
         temp_length = 99999
         possible_path = None
         for end_node, intersection_set in intersections.items():
             if intersection_set:
-                print("set:",intersection_set)
-                print("end node:",end_node)
-                print("now: ", (round(x),round(y)))
+                #print("set:",intersection_set)
+                #print("end node:",end_node)
+                #print("now: ", (round(x),round(y)))
                 p, peso = self.dijkstra(graph,(round(x),round(y)),end_node)
-                print("path", p)
-                print("weight", peso)
+                #print("path", p)
+                #print("weight", peso)
                 if p == "No path found":
-                    print(p)
+                    #print(p)
                     return None
                 if peso < temp_length:
                     temp_length =  peso
                     possible_path = p
 
-        print("possible path", possible_path)
+        #print("possible path", possible_path)
         if possible_path is None:
             self.driveMotors(0.0,0.0)
             print("we should exit now")
-            exit(0)
+            self.finish()
+            exit()
         goal = possible_path[1]
         self.last_goal = goal
         
         return goal
-
-    def run(self):
-
-        if self.status != 0:
-            print("Connection refused or error")
-            quit()
-
-        self.initialize_map()
-
-        #posicao inical do carro -> I
-        self.readSensors()
-        pos_inicial_real = [self.measures.x, self.measures.y]
-
-        ZEROS = ["0","0","0","0","0","0","0"]
-        BUFFER_DEFAULT = ["0","0","1","1","1","0","0"]      
-        BUFFER_SIZE = 9
-        buffer = []
-        
-        for i in range(BUFFER_SIZE):
-            buffer.append(BUFFER_DEFAULT)
-            
-        velSetPoint = 0.08
-        
-        sensor = self.measures.compass
-        exact_sensor = self.get_exact_sensor_value(sensor)
-        #print(exact_sensor)
-        
-        alpha = sensor
-        
-        last_sensor = 0
-        last_alpha = 0
-        
-        goal = self.get_next_goal(exact_sensor, 0, 0)
-        
-        #keys = (x,y) values = open_paths
-        intersections = {}
-        
-        #keys = (x,y) values = all_paths
-        graph = {}
-        
-        alpha_extra_laps = 0
-        sensor_extra_laps = 0
-        
-        last_coords = (0,0)
-        
-        beacons = [(0,0)]
-        
-        for i in range(int(self.nBeacons)-1):
-            beacons.append(None)
-        
-        backtracking = False
-            
-        while True:
-            self.readSensors()
-            
-            line = self.measures.lineSensor
-            sensor = self.measures.compass
-            #print("Sensor:",sensor)
-            
-            x = self.measures.x - pos_inicial_real[0]
-            y = self.measures.y - pos_inicial_real[1]
-
-            orientation_string = self.get_orientation_string(sensor)
-            #print("orientation:",orientation_string)
-            
-            if self.measures.ground != -1:
-                beacons[self.measures.ground] = (round(x),round(y))
-                print("beacons:",beacons)
-                print("beacon",self.measures.ground)
-                
-            
-            if abs(x-goal[0]) <= 0.15 and abs(y-goal[1]) <= 0.15:
-
-                self.outside = False
-
-                if (round(x),round(y)) in graph:
-                    weight = self.get_distance((round(x),round(y)),last_coords)
-                    if weight > 0:
-                        graph[(round(x),round(y))][last_coords] = weight
-                    if last_coords not in graph:
-                        graph[last_coords] = {}
-                    weight = self.get_distance(last_coords,(round(x),round(y)))
-                    if weight > 0:
-                        graph[last_coords][(round(x),round(y))] = weight
-                    
-                else:
-                    if last_coords:
-                        graph[(round(x),round(y))] = {}
-                        weight = self.get_distance((round(x),round(y)),last_coords)
-                        if weight > 0:                            
-                            graph[(round(x),round(y))][last_coords] = weight
-                        if last_coords not in graph:
-                            graph[last_coords] = {}
-                        weight = self.get_distance(last_coords,(round(x),round(y)))
-                        if weight > 0:
-                            graph[last_coords][(round(x),round(y))] = weight
-                
-                    print("\nGraph:")
-                    for node, connections in graph.items():
-                        print(f"{node} - Connections:")
-                        for neighbor, weight in connections.items():
-                            print(f"  -> {neighbor} (Weight: {weight})")
-
-                #print("Exact sensor value:", self.get_exact_sensor_value(sensor))
-                if (round(x),round(y)) not in intersections:
-                    intersections.setdefault((round(x), round(y)), set())
-
-                    #open paths e uma lista sem items repetidos
-                    open_paths = self.get_open_paths_for_intersection(buffer, x, y, self.get_exact_sensor_value(sensor))
-
-                    intersections[(round(x), round(y))].update(open_paths)
-                    
-                    print("intersections:",intersections)
-                    
-                    if intersections[(round(x),round(y))]:  # if there are still open paths in this intersection, choose one and explore it
-                        self.last_goal = goal
-                        goal = self.get_next_goal(intersections[(round(x),round(y))].pop(),goal[0],goal[1]) 
-                    else:                                   # if not go back 
-                        self.last_goal,goal = goal,self.last_goal
-                else:
-                    if intersections[(round(x),round(y))]:
-                        self.last_goal = goal
-                        goal = self.get_next_goal(intersections[(round(x),round(y))].pop(),goal[0],goal[1]) 
-                    else:
-                        if not backtracking:
-                            goal = self.minimun_weight_path(intersections, graph, x, y)
-                            if goal == None:
-                                continue
-
-                last_coords = (round(x),round(y))
-                
-            if None not in beacons:
-                print(beacons)
-                cost = None
-                solution = None
-                #func to add beacon to graph
-                for combination in combinations(beacons[1:],len(beacons)-1):
-                    print("combination:",combination)
-                    temp = []
-                    temp.append((0,0))
-                    temp.extend(combination)
-                    temp.append((0,0))
-                    print("temp:",temp)
-                    possible_solution = []
-                    for i in range(len(temp)-1):
-                        possible_solution += self.dijkstra(graph,temp[i],temp[i+1])[0]
-                        print("test:",possible_solution)
-                        #print(temp[i])
-                        #print(temp[i+1])
-                    if cost is None:
-                        cost = len(possible_solution)
-                        solution = possible_solution
-                    else:
-                        if len(possible_solution) < cost:
-                            cost = len(possible_solution)
-                            solution = possible_solution
-                            
-                print("Solution:",solution)
-                        
-                    
-                        
-                        
-                self.driveMotors(0.0,0.0)
-                exit(0)
-            
-                    
-            #print("goal:",goal)
-            #print("xy:",[x,y])
-            
-            if backtracking:
-                if abs(x-goal[0]) <= 0.15 and abs(y-goal[1]) <= 0.15:
-                    backtracking = False                                    #we reached our destination, no more backtracking
-            
-            alpha = math.atan2(goal[1]-y,goal[0]-x)*180/math.pi
-            #print("pre alpha:",alpha)
-            
-            #PID 180/-180 problem resolution
-            if abs(sensor-last_sensor) > 180:
-                if sensor > 0:
-                    sensor_extra_laps-=1
-                else:
-                    sensor_extra_laps+=1
-            
-            if abs(alpha-last_alpha) > 180:
-                if alpha > 0:
-                    alpha_extra_laps-=1
-                else:
-                    alpha_extra_laps+=1
-            
-            expr = ((sensor + sensor_extra_laps*360) - (alpha + alpha_extra_laps*360))
-            
-            u = self.PID(0,expr*0.02)*0.5
-
-            lPow = velSetPoint - u
-            rPow = velSetPoint + u          
-
-            self.driveMotors(lPow,rPow)
-
-            buffer = buffer[0:BUFFER_SIZE]
-            buffer = [line] + buffer
-
-            if self.check_out_of_line(buffer):
-                if not self.outside:
-                    
-                    #if self.get_exact_sensor_value(sensor) in [135, 45, -135, -45] and line==ZEROS:     #intersecao de 45o
-                    self.outside = True
-                    goal = self.last_goal
-                    last_coords = (self.last_goal[0], self.last_goal[1])
-                    #else:                                                                               #intersecao de 90o
-            
-            last_sensor = sensor
-            last_alpha = alpha
-            
-            #aqui vemos ja passamos por certos locais
-            if line[2:5].count("1") >= 2:
-                if (orientation_string != "-" and orientation_string != "|"):
-                    if(round(x)%2 == 1 and round(y)%2 == 1):
-                        self.put_in_map(round(x), round(y), orientation_string)
-                        self.print_map_to_file()
-                else:
-                    if (round(x)%2 == 1 or round(y)%2 == 1):
-                        self.put_in_map(round(x), round(y), orientation_string)
-                        self.print_map_to_file()
 
             
 class Map():
