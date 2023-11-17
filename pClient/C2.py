@@ -390,6 +390,9 @@ class MyRob(CRobLinkAngs):
         sensor = self.measures.compass
         exact_sensor = self.get_exact_sensor_value(sensor)
         #print(exact_sensor)
+        
+        x = self.measures.x - pos_inicial_real[0]
+        y = self.measures.y - pos_inicial_real[1]
 
         goal = self.get_next_goal(exact_sensor, 0, 0)
         print(goal)
