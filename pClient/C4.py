@@ -94,11 +94,13 @@ class MyRob(CRobLinkAngs):
         for i in range(BUFFER_SIZE):
             buffer.append(BUFFER_DEFAULT)
             
-        BUFFER_POS = [[0.0,0.0],[0.0,0.0]]
-        BUFFER_COMPASS = [0,0]
+        previous_pos = [0.0,0.0]
+        previous_compass = 0
+        previous_out = [0,0]
+        current_in = [0,0]
             
         velSetPoint = 0.15
-        
+        compass_extra_laps = 0
         pos_inicial_real = [self.measures.x, self.measures.y]
             
         while True:
@@ -111,9 +113,10 @@ class MyRob(CRobLinkAngs):
             x = self.measures.x - pos_inicial_real[0]
             y = self.measures.y - pos_inicial_real[1]
             
+            tight_turn = False
             gps_pos = [x,y]
             
-            print("Bússola:",sensor)
+            #print("Sensor:",sensor)
             print("Posição GPS:",gps_pos)
             
             #print("Line:",line)
@@ -127,6 +130,9 @@ class MyRob(CRobLinkAngs):
             #print("posOverLine:",posOverLine)
             
             if posOverLine == None:
+                xt = round(xt / 2.0) * 2.0
+                yt = round(yt / 2.0) * 2.0
+                
                 val = 0
                 for l in buffer:
                     val+=self.calculate_ones(l)
@@ -139,36 +145,59 @@ class MyRob(CRobLinkAngs):
                 #print("val:",val)
                 #print("buffer:",buffer)
                 if val > 0:
-                    self.driveMotors(-0.15,0.15)
+                    lPow,rPow = (-0.15,0.15)
                 else:
-                    self.driveMotors(0.15,-0.15)
-                continue
+                    lPow,rPow = (0.15,-0.15)
+                tight_turn = True
             
-            PID = self.PID(0, posOverLine)
-            lPow = velSetPoint - PID
-            rPow = velSetPoint + PID
             
+            if not tight_turn:
+                PID = self.PID(0, posOverLine)
+                lPow = velSetPoint - PID
+                rPow = velSetPoint + PID
+                
             self.driveMotors(lPow,rPow)
             
-            lin = (lPow + rPow)/2
-            print("lin:",lin)
-            print("in cosseno:",BUFFER_COMPASS[len(BUFFER_COMPASS)-1]*math.pi/180)
-            xt = BUFFER_POS[len(BUFFER_POS)-1][0] + lin*math.cos(BUFFER_COMPASS[len(BUFFER_COMPASS)-1]*math.pi/180)
-            yt = BUFFER_POS[len(BUFFER_POS)-1][1] + lin*math.cos(BUFFER_COMPASS[len(BUFFER_COMPASS)-1]*math.pi/180)
+            current_in = [lPow,rPow]
+            if current_in[0] > 0.15:
+                current_in[0] = 0.15
+            if current_in[0] < -0.15:
+                current_in[0] = -0.15
+            if current_in[1] > 0.15:
+                current_in[1] = 0.15
+            if current_in[1] < -0.15:
+                current_in[1] = -0.15
+            out = [(previous_out[0]+current_in[0])/2,(previous_out[1]+current_in[1])/2]
             
+            lin = (out[0] + out[1])/2
+            
+            #print("lin:",lin)
+            
+            xt = round(previous_pos[0] + lin*math.cos(previous_compass),1)
+            yt = round(previous_pos[1] + lin*math.sin(previous_compass),1)
+            
+            rot = math.degrees(out[1]-out[0])
+            
+            compass = round(previous_compass + rot,0)
+            
+            if compass > 180:
+                compass -= 360
+            if compass < -180:
+                compass += 360
+            
+            #print("previous_compass:",previous_compass)
+            #print("compass:",compass)
             print("Predict Posição:",[xt,yt])
+            #print("Predict Sensor:",compass)
+            #print("Current in:",current_in)
             
-            rot = (lPow + rPow)/0.5
+            print("Diff Posição:",[x-xt,y-yt])
+            print("Diff Sensor:",sensor-compass)
+            #print("Current in:",current_in)
             
-            thetat = BUFFER_COMPASS[len(BUFFER_COMPASS)-1] + rot
-            
-            print("Predict Sensor:",thetat)
-            
-            BUFFER_POS = BUFFER_POS[1:]
-            BUFFER_POS.append([xt,yt])
-            
-            BUFFER_COMPASS = BUFFER_COMPASS[1:]
-            BUFFER_COMPASS.append(thetat)
+            previous_pos = [xt,yt]
+            previous_compass = compass
+            previous_out = out
             
             buffer = buffer[0:BUFFER_SIZE]
             buffer = [original_line] + buffer
