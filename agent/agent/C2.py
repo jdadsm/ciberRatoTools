@@ -4,6 +4,7 @@ from croblink import *
 import math
 import xml.etree.ElementTree as ET
 
+
 CELLROWS=7
 CELLCOLS=14
 
@@ -601,6 +602,47 @@ class MyRob(CRobLinkAngs):
         
         return goal
 
+    def finish_C3(self,beacons,graph):    
+        print(beacons)
+        cost = None
+        solution = None
+        #func to add beacon to graph
+        for combination in permutations(beacons[1:],len(beacons)-1):
+            #print("combination:",combination)
+            temp = []
+            temp.append((0,0))
+            temp.extend(combination)
+            temp.append((0,0))
+            #print("temp:",temp)
+            possible_solution = []
+            possible_cost = 0
+            for i in range(len(temp)-1):
+                temp_dijkstra = self.dijkstra(graph,temp[i],temp[i+1])
+                if i == 0:
+                    possible_solution += temp_dijkstra[0]
+                    possible_cost += temp_dijkstra[1]
+                else:
+                    possible_solution += temp_dijkstra[0][1:]
+                    repeated_points_weight = self.get_distance(temp_dijkstra[0][0],temp_dijkstra[0][1])
+                    possible_cost += temp_dijkstra[1] - repeated_points_weight
+                #print("test:",possible_solution)
+                #print(temp[i])
+                #print(temp[i+1])
+            if cost is None:
+                cost = possible_cost
+                solution = possible_solution
+            else:
+                if possible_cost < cost:
+                    cost = possible_cost
+                    solution = possible_solution
+        
+        print("Solution:",solution)
+        file = open("pathC3.path", "w")
+        for coord in solution:
+            file.write(f"{coord[0]} {coord[1]}\n")
+        self.driveMotors(0.0,0.0)
+        self.finish()
+        exit(0)
             
 class Map():
     def __init__(self, filename):
